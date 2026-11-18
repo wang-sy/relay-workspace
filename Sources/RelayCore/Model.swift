@@ -34,6 +34,7 @@ public struct Change: Codable, Equatable, Sendable {
   public var due: Date?
   public var recipient: String?
   public var reference: UUID?
+  public var affectsRequirement: Bool?
 
   public init(_ operation: WorkOperation, _ itemID: String) {
     self.operation = operation

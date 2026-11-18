@@ -2,7 +2,9 @@
 
 Relay 是一个面向 Agent 的团队工作日志。Mac、iPhone 和 iPad 使用 SwiftUI 原生客户端。独立的 TypeScript HTTP 服务保存团队记录，Codex 和 Claude Code 可以通过 Mac 自带的 CLI 或 stdio MCP 读写同一份数据。项目使用 MIT 许可证。
 
-看板按方向、需求、任务和探索组织工作。成员角色、状态和分类可以自由填写。需求按时间推进。首页根据暂停时长、无结果的计划节点和未回应的交付提示需要回看的事项。
+「团队概览」每个需求占一行，显示方向、署名推进人和当前进展。卡住或等接手的需求排在前面，完成当天留在底部并显示具体结果。日期按查看设备的本地日历计算。次日仍可从侧栏「方向与需求」打开详情，查看任务、排期和交付历史；未来想法在「探索池」。
+
+首页即时显示未恢复的暂停和未回应的交付。需求自身的依赖优先，其次是任务上明确标为影响需求的依赖。旧任务记录仍参与汇总，标为仅影响任务的记录留在详情。尚未到开始日、也没有实际进展的需求留在排期中。角色和状态可自由填写。
 
 ## 先在 Mac 上跑起来
 
@@ -66,7 +68,7 @@ claude mcp add --transport stdio relay -- "$relay_bin" --server http://127.0.0.1
 
 CLI 和 MCP 默认连接本机服务，`--server` 或 `RELAY_SERVER_URL` 可以指定团队地址。令牌可通过运行进程的 `RELAY_TOKEN` 环境变量提供，或加上 `--keychain` 读取应用为该服务保存的令牌。要访问文件工作空间，显式传入 `--workspace DIRECTORY`。在本机演示或文件模式下可以设置 `RELAY_ACTOR` 指定署名，`RELAY_AGENT` 用于记录工具来源。
 
-stdio MCP 提供 `relay_read` 和 `relay_apply`。直接通过 shell 调用时，`read`、`gaps` 返回 JSON，`apply` 从 stdin 读取一条写入。重复提交同一请求时使用相同的 requestID、成员、来源、会话和内容。新写入使用新的 UUID。时间字段采用 ISO 8601，例如 `2030-03-01T09:00:00Z`。
+stdio MCP 提供 `relay_read` 和 `relay_apply`。用 `relay board` 或 `relay_read` 的 `{"scope":"board"}` 读取与客户端首页相同的需求清单。`read` 和 `gaps` 分别返回完整记录和待回看信号，`apply` 从 stdin 读取一条写入。重复提交同一请求时使用相同的 requestID、成员、来源、会话和内容。新写入使用新的 UUID。时间字段采用 ISO 8601，例如 `2030-03-01T09:00:00Z`。
 
 ```sh
 "$relay_bin" gaps
@@ -87,9 +89,9 @@ JSON
 | --- | --- |
 | create | kind、title、itemID。需求的 parentID 指向方向，Task 的 parentID 指向需求。需求填写 start 和 end。 |
 | update / promote | status、members、next 等按需提供。promote 保留探索 ID 和历史，并填写方向和计划周期。 |
-| pause / resume / close | 记录暂停、恢复或收尾事实，可同时填写状态和说明。 |
+| pause / resume / close | 暂停时用 note 说明卡点，用 recipient 指明在等谁。需求收尾须在 note 写明完成结果。旧记录仍可导入。 |
 | milestone / result | 计划日期 due 和内容 note。结果通过 reference 指向原计划事件 UUID。 |
-| handoff / acknowledge | 交给 recipient 并填写 note。回应通过 reference 指向具体的交付事件。 |
+| handoff / acknowledge | 交给 recipient 并填写 note。回应通过 reference 指向具体的交付事件。任务的 pause 和 handoff 可填 affectsRequirement，表示是否影响上级需求。 |
 | remind | due、recipient、note。指定当前暂停事件的 UUID 作为 reference 即可约定条件回看。 |
 
 ## 本地通知

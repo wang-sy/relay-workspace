@@ -86,7 +86,7 @@ struct ItemLink: View {
           }
         }
         Spacer(minLength: 4)
-        StatusLabel(text: item.status, tone: item.kind.tone)
+        StatusLabel(text: item.closed ? "已完成" : item.status, tone: item.kind.tone)
       }.padding(.vertical, 7).padding(.horizontal, 2)
     }.buttonStyle(RelayRowStyle())
   }
@@ -116,6 +116,7 @@ struct WorkspaceView: View {
   @State private var path = NavigationPath()
   @State private var compact: NavigationSplitViewColumn = .detail
   @State private var edit: EditTarget?
+  @State private var showingSchedule = false
   @State private var picking = false
   @State private var serverDraft = ""
   @State private var tokenDraft = ""
@@ -138,7 +139,6 @@ struct WorkspaceView: View {
               ContentUnavailableView("暂无事项", systemImage: "questionmark.folder")
             }
           }
-          .navigationDestination(for: OverviewList.self) { OverviewListPage(list: $0) }
           .toolbar {
             if selection != .settings && path.isEmpty
               && (model.serverAddress == nil || model.hasSnapshot)
@@ -258,10 +258,17 @@ struct WorkspaceView: View {
 
   @ViewBuilder private var pageBody: some View {
     switch selection ?? .overview {
-    case .overview: Overview(state: model.state, items: all)
+    case .overview: Overview(state: model.state)
     case .directions:
       let directions = all.filter { $0.kind == .direction }
-      RelayPage { _ in
+      RelayPage { width in
+        DisclosureGroup("需求排期", isExpanded: $showingSchedule) {
+          let scheduled = all.filter { $0.kind == .requirement }.sorted {
+            ($0.start ?? .distantFuture, $0.id) < ($1.start ?? .distantFuture, $1.id)
+          }
+          RequirementSchedule(
+            items: scheduled, entries: model.state.entries, width: width - 20, today: .now)
+        }
         if directions.isEmpty { empty("flag", "尚未记录方向") }
         ForEach(directions) { direction in
           let requirements = model.state.children(of: direction.id).filter {

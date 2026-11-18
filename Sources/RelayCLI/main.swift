@@ -18,8 +18,9 @@ struct AgentTools {
     }
     switch scope {
     case "workspace": return try Wire.encoder().encode(workspace)
+    case "board": return try Wire.encoder().encode(workspace.requirementBoard())
     case "gaps": return try Wire.encoder().encode(workspace.gaps())
-    default: throw RelayError("scope must be workspace or gaps")
+    default: throw RelayError("scope must be workspace, board or gaps")
     }
   }
 
@@ -32,9 +33,10 @@ struct AgentTools {
 }
 
 let help = """
-  relay [--server URL [--keychain] | --workspace DIRECTORY] read | gaps | apply | sample | mcp
+  relay [--server URL [--keychain] | --workspace DIRECTORY] read | board | gaps | apply | sample | mcp
 
-  read and gaps print JSON. apply reads one JSON write from stdin. mcp serves tools over stdio.
+  board prints the team's requirement list. read and gaps print the workspace or omissions as JSON.
+  apply reads one JSON write from stdin. mcp serves tools over stdio.
   Default server: http://127.0.0.1:8731. RELAY_SERVER_URL and RELAY_TOKEN configure a service.
   --keychain uses the token saved by the native app for this exact server URL.
   --workspace or RELAY_WORKSPACE selects a file journal; sample is only available for file journals.
@@ -85,7 +87,8 @@ do {
     source: env["RELAY_AGENT"] ?? "Local Agent")
   let data: Data
   switch command {
-  case "read", "gaps": data = try await tools.read(command == "read" ? "workspace" : "gaps")
+  case "read", "board", "gaps":
+    data = try await tools.read(command == "read" ? "workspace" : command)
   case "apply": data = try await tools.write(FileHandle.standardInput.readDataToEndOfFile())
   case "sample":
     guard case .folder(let local) = journal else {

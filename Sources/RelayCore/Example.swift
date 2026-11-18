@@ -2,8 +2,9 @@ import Foundation
 
 public enum Example {
   public static func entries(at now: Date) -> [Entry] {
-    let base = Calendar.current.startOfDay(for: now).addingTimeInterval(-7 * 86400)
-    func day(_ n: Int) -> Date { base.addingTimeInterval(Double(n) * 86400) }
+    let calendar = Calendar.current
+    let today = calendar.startOfDay(for: now)
+    func day(_ n: Int) -> Date { calendar.date(byAdding: .day, value: n - 7, to: today) ?? today }
     var events = [Entry]()
     @discardableResult func add(_ c: Change, _ when: Int, who: String = "River") -> UUID {
       let index = events.count + 1
@@ -52,6 +53,7 @@ public enum Example {
     add(milestone, 3)
     var handoff = Change(.handoff, "TASK-02")
     handoff.recipient = "River"
+    handoff.affectsRequirement = true
     handoff.note = "入门指南草稿已就绪，请从空目录复测。"
     add(handoff, 5, who: "Mira")
     var idea = Change(.create, "IDEA-01")
@@ -66,6 +68,22 @@ public enum Example {
     idea.category = "技术 / 内部提效"
     idea.note = "先取一组样本判断是否值得投入。"
     add(idea, 6, who: "Jun")
+    item(
+      "REQ-03", .requirement, "保存离线草稿", "DIR-01", "联调中", "验证断网后恢复编辑。",
+      [Member("Jun", "开发")], 4, 12)
+    item(
+      "REQ-04", .requirement, "迁移旧账号", "DIR-02", "字段核对", "映射后导入历史记录。",
+      [Member("Mira", "推进迁移")], 4, 12)
+    var blocked = Change(.pause, "REQ-04")
+    blocked.recipient = "Jun"
+    blocked.note = "确认旧账号的映射规则。"
+    add(blocked, 7, who: "Mira")
+    item(
+      "REQ-05", .requirement, "导出交付记录", "DIR-02", "联调中", "提供导出结果。",
+      [Member("River", "交付")], 3, 7)
+    var closed = Change(.close, "REQ-05")
+    closed.note = "支持按需求导出交付记录，已上线。"
+    add(closed, 7)
     return events
   }
 }

@@ -28,6 +28,7 @@ export const changeSchema = z.strictObject({
   due: timestamp.optional(),
   recipient: z.string().optional(),
   reference: uuid.optional(),
+  affectsRequirement: z.boolean().optional(),
 });
 
 export const writeSchema = z.strictObject({

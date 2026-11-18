@@ -41,14 +41,23 @@ enum RelayPalette {
 }
 
 struct RelayPage<Content: View>: View {
+  private let maxWidth: CGFloat
+  private let background: Color
   private let content: (CGFloat) -> Content
 
-  init(@ViewBuilder content: @escaping (CGFloat) -> Content) { self.content = content }
+  init(
+    maxWidth: CGFloat = 1232, background: Color = RelayPalette.canvas,
+    @ViewBuilder content: @escaping (CGFloat) -> Content
+  ) {
+    self.maxWidth = maxWidth
+    self.background = background
+    self.content = content
+  }
 
   var body: some View {
     GeometryReader { proxy in
       let inset: CGFloat = proxy.size.width < 550 ? 16 : 24
-      let width = max(0, min(1232, proxy.size.width - 2 * inset))
+      let width = max(0, min(maxWidth, proxy.size.width - 2 * inset))
       ScrollView {
         VStack(alignment: .leading, spacing: 18) { content(width) }
           .frame(width: width, alignment: .leading)
@@ -57,7 +66,7 @@ struct RelayPage<Content: View>: View {
       }
     }
     .foregroundStyle(RelayPalette.primary)
-    .background(RelayPalette.canvas)
+    .background(background)
   }
 }
 

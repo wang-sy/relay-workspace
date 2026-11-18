@@ -16,6 +16,8 @@ struct Editor: View {
   @State private var member = ""
   @State private var role = ""
   @State private var recipient = ""
+  @State private var waitingFor = ""
+  @State private var affectsRequirement = true
   @State private var start: Date
   @State private var end: Date
   @State private var due = Date().addingTimeInterval(3 * 86400)
@@ -46,6 +48,15 @@ struct Editor: View {
     let expected: WorkOperation = operation == .result ? .milestone : .handoff
     return model.state.history(item.id).filter {
       $0.change.operation == expected && !model.state.resolved($0.id)
+    }
+  }
+  private var notePrompt: String {
+    switch operation {
+    case .close: return "完成了什么"
+    case .handoff: return "需要对方做什么"
+    case .pause: return "卡在哪里"
+    case .remind: return "到时提醒什么"
+    default: return "记录内容"
     }
   }
   var body: some View {
@@ -95,6 +106,10 @@ struct Editor: View {
         }
         if [.milestone, .remind].contains(operation) { DatePicker("约定时间", selection: $due) }
         if [.handoff, .remind].contains(operation) { TextField("接收成员（* 表示全体）", text: $recipient) }
+        if operation == .pause { TextField("在等谁（可选）", text: $waitingFor) }
+        if target.item?.kind == .task && [.pause, .handoff].contains(operation) {
+          Toggle("影响上级需求的下一步", isOn: $affectsRequirement)
+        }
         if operation == .remind && target.item?.pauseID != nil {
           Toggle("届时仍是这次暂停才提醒", isOn: $conditional)
         }
@@ -104,15 +119,19 @@ struct Editor: View {
             ForEach(references) { e in Text(e.change.note ?? e.id.uuidString).tag(Optional(e.id)) }
           }
         }
-        TextField(operation == .remind ? "到时提醒什么" : "记录内容", text: $note, axis: .vertical).lineLimit(
-          2...5)
+        TextField(notePrompt, text: $note, axis: .vertical).lineLimit(2...5)
         if let error { Text(error).foregroundStyle(.red) }
       }.formStyle(.grouped)
         .navigationTitle(operation.label)
         .toolbar {
           ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
           ToolbarItem(placement: .confirmationAction) {
-            Button("保存") { Task { await save() } }.disabled(saving)
+            Button("保存") { Task { await save() } }
+              .disabled(
+                saving
+                  || (operation == .close && target.item?.kind == .requirement
+                    && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+              )
           }
         }
     }
@@ -153,6 +172,13 @@ struct Editor: View {
     }
     if [.remind, .milestone].contains(operation) { c.due = due }
     if [.remind, .handoff].contains(operation) { c.recipient = recipient }
+    if operation == .pause {
+      let name = waitingFor.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !name.isEmpty { c.recipient = name }
+    }
+    if target.item?.kind == .task && [.pause, .handoff].contains(operation) {
+      c.affectsRequirement = affectsRequirement
+    }
     if operation == .remind && conditional { c.reference = target.item?.pauseID }
     if [.result, .acknowledge].contains(operation) { c.reference = reference }
     do {

@@ -12,7 +12,8 @@ private let changeFields: Object = [
   "title": prop("Title for create, or an updated title."),
   "status": prop("Free text. Suggested values: planned, active, waiting, delivered."),
   "category": prop("Exploration category path, e.g. Engineering / Productivity."),
-  "note": prop("A concrete conclusion, planned milestone, handoff or reminder message."),
+  "note": prop(
+    "Record the outcome when closing a requirement. For a pause or handoff, state what is needed."),
   "next": prop("Next action someone can pick up."),
   "members": [
     "type": "array",
@@ -26,17 +27,24 @@ private let changeFields: Object = [
   "start": prop("ISO 8601 timestamp. Required on a scheduled requirement."),
   "end": prop("ISO 8601 timestamp. Required on a scheduled requirement."),
   "due": prop("ISO 8601 timestamp for milestone or remind."),
-  "recipient": prop("Member label for handoff or remind. * addresses all members."),
+  "recipient": prop(
+    "Member needed to unblock a pause, or the recipient of a handoff or reminder. * addresses everyone."
+  ),
+  "affectsRequirement": [
+    "type": "boolean",
+    "description":
+      "On a task pause or handoff, set true if it affects the parent requirement's next step, false for task-only work.",
+  ],
   "reference": prop(
     "Event UUID for acknowledge/result, or the current pause UUID for a conditional reminder."),
 ]
 private let descriptors: [Object] = [
   [
     "name": "relay_read",
-    "description": "Read the shared work journal, or inspect potential omissions.",
+    "description": "Read the current team requirement board, full journal or potential omissions.",
     "inputSchema": [
       "type": "object",
-      "properties": ["scope": ["type": "string", "enum": ["workspace", "gaps"]]],
+      "properties": ["scope": ["type": "string", "enum": ["workspace", "board", "gaps"]]],
       "additionalProperties": false,
     ],
   ],

@@ -91,3 +91,26 @@ test("an invalid import rolls back the entire batch and remote binding needs cre
     assert.throws(() => store.import([original]), /empty/);
   } finally { store.close(); }
 });
+
+test("requirement closure validates new writes and preserves historical imports and retries", () => {
+  const store = new JournalStore(":memory:");
+  const historical = [
+    { operation: "create", kind: "direction", itemID: "d", title: "Team" },
+    { operation: "create", kind: "requirement", itemID: "r", parentID: "d", title: "Import",
+      start: "2026-01-01T00:00:00Z", end: "2026-01-31T00:00:00Z" },
+    { operation: "close", itemID: "r" },
+  ].map((change, i) => entrySchema.parse({ id: randomUUID(), version: 1, sequence: i + 1,
+    actor: "member", source: "test", time: "2026-01-08T12:00:00Z", change }));
+  try {
+    store.import(historical);
+    const old = historical[2];
+    const retry = { requestID: old.id, actor: old.actor, source: old.source, change: old.change };
+    assert.equal(store.append(retry).created, false);
+    store.append(write({ operation: "resume", itemID: "r" }));
+    assert.throws(() => store.append(write({ operation: "close", itemID: "r", note: "  " })), /完成了什么/);
+    assert.equal(store.snapshot(null).body.workspace.items.r.closed, false);
+    const close = store.append(write({ operation: "close", itemID: "r", note: "Import retry shipped" }));
+    assert.equal(close.entry.change.note, "Import retry shipped");
+    assert.equal(store.snapshot(null).body.workspace.items.r.closed, true);
+  } finally { store.close(); }
+});

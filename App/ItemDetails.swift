@@ -10,7 +10,9 @@ struct ItemDetails: View {
   var body: some View {
     let state = model.state
     let events = state.history(item.id)
-    let gaps = state.gaps().filter { $0.itemID == item.id }
+    let pending = state.outstandingWork(for: item)
+    let pendingIDs = Set(pending.map(\.id))
+    let gaps = state.gaps().filter { $0.itemID == item.id && !pendingIDs.contains($0.id) }
     RelayPage { width in
       VStack(alignment: .leading, spacing: 8) {
         if let parentID = item.parentID, let parent = state.items[parentID] {
@@ -22,27 +24,54 @@ struct ItemDetails: View {
         Text(item.title).font(.largeTitle.weight(.semibold)).accessibilityAddTraits(.isHeader)
         HStack(spacing: 7) {
           Text(item.kind.label).font(.subheadline).foregroundStyle(RelayPalette.secondary)
-          StatusLabel(text: item.status, tone: item.kind.tone)
+          StatusLabel(text: item.closed ? "已完成" : item.status, tone: item.kind.tone)
           if let category = item.category, !category.isEmpty {
             Text(category).font(.subheadline).foregroundStyle(RelayPalette.secondary)
           }
         }
       }
-      if !gaps.isEmpty {
+      if let completion = item.completion(in: events) {
+        RelayPanel(spacing: 6) {
+          PanelTitle("完成结果")
+          Text(completion.note ?? "完成内容待补录")
+          Text(RelayDate.long(completion.date)).font(.caption).foregroundStyle(
+            RelayPalette.secondary)
+        }
+      }
+      if !pending.isEmpty || !gaps.isEmpty {
         RelayPanel(spacing: 10) {
           PanelTitle("需要回看")
+          ForEach(pending) { entry in
+            if let source = state.items[entry.change.itemID] {
+              if entry.id != pending.first?.id { Hairline() }
+              VStack(alignment: .leading, spacing: 6) {
+                if source.id != item.id {
+                  NavigationLink(value: source.id) {
+                    Label(source.title, systemImage: source.kind.icon)
+                  }.buttonStyle(.plain).foregroundStyle(RelayPalette.accent)
+                }
+                let who = entry.change.recipient.map { $0 == "*" ? "全体成员" : $0 }
+                Text(
+                  [
+                    entry.change.operation == .pause ? "卡住" : "等接手", who.map { "等" + $0 },
+                    entry.change.note,
+                  ].compactMap { $0 }.joined(separator: " · "))
+                gapAction(entry, on: source)
+              }
+            }
+          }
           ForEach(gaps) { gap in
-            if gap.id != gaps.first?.id { Hairline() }
+            if !pending.isEmpty || gap.id != gaps.first?.id { Hairline() }
             let entry = events.first { $0.id == gap.id }
             ViewThatFits(in: .horizontal) {
               HStack(spacing: 12) {
                 gapNote(gap, entry: entry)
                 Spacer(minLength: 12)
-                gapAction(entry)
+                gapAction(entry, on: item)
               }
               VStack(alignment: .leading, spacing: 10) {
                 gapNote(gap, entry: entry)
-                gapAction(entry)
+                gapAction(entry, on: item)
               }
             }
           }
@@ -82,13 +111,16 @@ struct ItemDetails: View {
         if !gap.reason.isEmpty && gap.reason != item.title {
           Text(gap.reason).font(.callout).foregroundStyle(RelayPalette.secondary)
         }
-        Text(FollowUpRow.context(item: item, entry: entry))
-          .font(.caption).foregroundStyle(RelayPalette.secondary)
+        if let entry {
+          let due = entry.change.due ?? item.end ?? entry.time
+          Text(entry.actor + " · " + RelayDate.short(due)).font(.caption)
+            .foregroundStyle(RelayPalette.secondary)
+        }
       }
     }.fixedSize(horizontal: false, vertical: true)
   }
 
-  private func gapAction(_ entry: Entry?) -> some View {
+  private func gapAction(_ entry: Entry?, on source: Item) -> some View {
     let op: WorkOperation
     switch entry?.change.operation {
     case .handoff: op = .acknowledge
@@ -97,7 +129,8 @@ struct ItemDetails: View {
     default: op = .update
     }
     return Button(op.label) {
-      edit(EditTarget(item, op, reference: [.result, .acknowledge].contains(op) ? entry?.id : nil))
+      edit(
+        EditTarget(source, op, reference: [.result, .acknowledge].contains(op) ? entry?.id : nil))
     }.buttonStyle(.bordered).fixedSize()
   }
 

@@ -47,7 +47,7 @@ export class JournalStore {
     if (row) return JSON.parse(String(row.value));
   }
 
-  private insert(write: Write, time: string) {
+  private insert(write: Write, time: string, mode: "append" | "import") {
     const row = this.db.prepare("SELECT seq, time, request FROM events WHERE id = ?").get(write.requestID);
     if (row) {
       if (!isDeepStrictEqual(write, JSON.parse(String(row.request)))) {
@@ -56,6 +56,9 @@ export class JournalStore {
       return { entry: this.toEntry(Number(row.seq), String(row.time), write), created: false };
     }
     const item = project(write, id => this.item(id), id => this.event(id));
+    if (mode === "append" && item.kind === "requirement" && write.change.operation === "close" && !write.change.note?.trim()) {
+      throw new ApiError(422, "请写清楚这个需求完成了什么");
+    }
     const result = this.db.prepare("INSERT INTO events(id, time, request) VALUES (?, ?, ?)")
       .run(write.requestID, time, JSON.stringify(write));
     this.db.prepare("INSERT INTO items(id, value) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET value = excluded.value")
@@ -64,7 +67,7 @@ export class JournalStore {
   }
 
   append(write: Write) {
-    return this.transaction(true, () => this.insert(write, new Date().toISOString().replace(/\.\d{3}Z$/, "Z")));
+    return this.transaction(true, () => this.insert(write, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), "append"));
   }
 
   import(entries: Entry[]) {
@@ -74,7 +77,7 @@ export class JournalStore {
       }
       for (const entry of entries) {
         const { id, time, version: _version, sequence: _sequence, ...fields } = entry;
-        this.insert({ requestID: id, ...fields }, time);
+        this.insert({ requestID: id, ...fields }, time, "import");
       }
       return entries.length;
     });

@@ -68,6 +68,36 @@ def exercise(cmd, env):
     return state
 
 
+
+def exercise_board(cmd, env):
+    def apply(change, check=True):
+        data = json.dumps({"requestID": str(uuid.uuid4()), "change": change})
+        return subprocess.run(cmd + ["apply"], input=data, text=True, env=env, check=check,
+                              capture_output=True, timeout=15)
+
+    apply({"operation": "create", "kind": "requirement", "itemID": "r", "title": "Import",
+           "parentID": "sample-direction", "start": "2020-01-01T00:00:00Z", "end": "2050-01-01T00:00:00Z",
+           "members": [{"name": "owner", "role": "delivery"}]})
+    apply({"operation": "create", "kind": "task", "itemID": "t", "parentID": "r", "title": "Verify"})
+    handoff = json.loads(apply({"operation": "handoff", "itemID": "t", "recipient": "reviewer",
+                                "note": "verify import", "affectsRequirement": True}).stdout)
+    rows = json.loads(subprocess.check_output(cmd + ["board"], env=env))
+    assert len(rows) == 1 and rows[0]["phase"] == "waiting" and rows[0]["attention"]["id"].lower() == handoff["id"].lower()
+    calls = [
+        {"id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}},
+        {"id": 2, "method": "tools/call", "params": {"name": "relay_read", "arguments": {"scope": "board"}}}
+    ]
+    frames = "".join(json.dumps(dict(jsonrpc="2.0", **c)) + "\n" for c in calls)
+    output = subprocess.run(cmd + ["mcp"], input=frames, text=True, capture_output=True, check=True, env=env, timeout=15)
+    assert json.loads(json.loads(output.stdout.splitlines()[-1])["result"]["content"][0]["text"]) == rows
+    apply({"operation": "acknowledge", "itemID": "t", "reference": handoff["id"], "note": "verified"})
+    assert json.loads(subprocess.check_output(cmd + ["board"], env=env))[0]["phase"] == "active"
+    assert apply({"operation": "close", "itemID": "r", "note": "  "}, check=False).returncode != 0
+    apply({"operation": "close", "itemID": "r", "note": "Import retry shipped"})
+    finished = json.loads(subprocess.check_output(cmd + ["board"], env=env))[0]
+    assert finished["phase"] == "completedToday" and finished["summary"] == "Import retry shipped"
+
+
 with tempfile.TemporaryDirectory() as folder:
     if args.service:
         with backend(Path(folder)) as (address, token):
@@ -79,7 +109,11 @@ with tempfile.TemporaryDirectory() as folder:
             assert remote["viewer"] == "test-member"
             assert remote["workspace"]["items"] == snapshot["items"]
             assert len(remote["workspace"]["entries"]) == 1
+            exercise_board([binary, "--server", address], env)
         print("Swift CLI and MCP share one durable, attributed HTTP write.")
     else:
-        exercise([binary, "--workspace", folder], dict(os.environ, RELAY_ACTOR="test-member"))
+        cmd = [binary, "--workspace", folder]
+        env = dict(os.environ, RELAY_ACTOR="test-member")
+        exercise(cmd, env)
+        exercise_board(cmd, env)
         print("CLI and MCP read the same idempotent file write.")
