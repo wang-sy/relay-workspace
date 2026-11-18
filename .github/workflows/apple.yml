@@ -1,0 +1,29 @@
+name: Apple clients
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test core and local agent tools
+        run: |
+          swift test
+          python3 Scripts/smoke-agent.py "$(swift build --show-bin-path)/relay"
+      - name: Build macOS application and embedded agent
+        run: |
+          xcodebuild -project Relay.xcodeproj -scheme Relay -configuration Debug -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/relay-mac" CODE_SIGNING_ALLOWED=NO build
+          "$RUNNER_TEMP/relay-mac/Build/Products/Debug/Relay.app/Contents/MacOS/relay" --help
+      - name: Build iPhone and iPad application
+        run: |
+          xcodebuild -project Relay.xcodeproj -scheme Relay -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/relay-ios" CODE_SIGNING_ALLOWED=NO build
+      - name: Launch on iPhone and iPad simulators
+        run: Scripts/smoke-simulators.sh "$RUNNER_TEMP/relay-ios/Build/Products/Debug-iphonesimulator/Relay.app" "$RUNNER_TEMP/previews"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apple-mobile-previews
+          path: ${{ runner.temp }}/previews/*.png

@@ -1,0 +1,507 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0C78A5D53E9E1DEA15542771 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F025A9C363E120137A7E424 /* main.swift */; };
+		17DB29E2D1802F4F9287884C /* Editor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF9EAE89967AE28367C695C /* Editor.swift */; };
+		1F635A86151BC49324CFFE44 /* relay in Embed macOS agent CLI */ = {isa = PBXBuildFile; fileRef = 2485AF70E8804E2B387F633D /* relay */; platformFilter = macos; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		6D0D7B0705925FC59607994A /* WorkspaceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB4C65F9CE53FDC2738BCAA /* WorkspaceViews.swift */; };
+		74ABE8A8A493C2959CF76026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 71357F4C8F183087B9274828 /* Assets.xcassets */; };
+		7A6B90F94628D87FE628923C /* MCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD804C6A536121D7C2690AA /* MCP.swift */; };
+		8AAC00251AC0F8F3EE75EA70 /* RelayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 240C9D7DCDC0BE1D93501072 /* RelayApp.swift */; };
+		A2428E26DDF87F25AD7468E5 /* WorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF913EB576F80EC27F5A204E /* WorkspaceModel.swift */; };
+		CE70DBA02AF3919788424B2A /* RelayCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC8A7D3D380D5079E64C7374 /* RelayCore */; };
+		D2D1CA26FB52633CB6584836 /* RelayCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5B2F4EADB7E44397E32BAB16 /* RelayCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6C6A1EB36E9AB50E8B343AFE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 434707AADF4F03C36663B595 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BEF58C10EEE68B4F01957AA;
+			remoteInfo = RelayAgentTool;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2D5D7BE75925B82C780B5C5D /* Embed macOS agent CLI */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				1F635A86151BC49324CFFE44 /* relay in Embed macOS agent CLI */,
+			);
+			name = "Embed macOS agent CLI";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		240C9D7DCDC0BE1D93501072 /* RelayApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RelayApp.swift; sourceTree = "<group>"; };
+		2485AF70E8804E2B387F633D /* relay */ = {isa = PBXFileReference; includeInIndex = 0; path = relay; sourceTree = BUILT_PRODUCTS_DIR; };
+		2CA20CACDC9D3F7E4A983DE6 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
+		2F025A9C363E120137A7E424 /* main.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		3AD804C6A536121D7C2690AA /* MCP.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MCP.swift; sourceTree = "<group>"; };
+		4FF9EAE89967AE28367C695C /* Editor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Editor.swift; sourceTree = "<group>"; };
+		71357F4C8F183087B9274828 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9738020AE98E0D4FBE44853A /* Relay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Relay.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9FB4C65F9CE53FDC2738BCAA /* WorkspaceViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkspaceViews.swift; sourceTree = "<group>"; };
+		DF913EB576F80EC27F5A204E /* WorkspaceModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkspaceModel.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4A979512E157B53DFCFFD0A6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D2D1CA26FB52633CB6584836 /* RelayCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		66D271B36A12C71188A35A49 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CE70DBA02AF3919788424B2A /* RelayCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4148638267B5EA31DB1CEA93 /* RelayCLI */ = {
+			isa = PBXGroup;
+			children = (
+				3AD804C6A536121D7C2690AA /* MCP.swift */,
+				2F025A9C363E120137A7E424 /* main.swift */,
+			);
+			name = RelayCLI;
+			path = Sources/RelayCLI;
+			sourceTree = "<group>";
+		};
+		56D88FBB009AE0B1D2BB3636 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				E1ACC3F711D5697AD4F4F2EB /* OS X */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		731F1659BF8BCBF7190B39E5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9738020AE98E0D4FBE44853A /* Relay.app */,
+				2485AF70E8804E2B387F633D /* relay */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A29AE12A441E66799C406778 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				4FF9EAE89967AE28367C695C /* Editor.swift */,
+				240C9D7DCDC0BE1D93501072 /* RelayApp.swift */,
+				DF913EB576F80EC27F5A204E /* WorkspaceModel.swift */,
+				9FB4C65F9CE53FDC2738BCAA /* WorkspaceViews.swift */,
+				71357F4C8F183087B9274828 /* Assets.xcassets */,
+			);
+			name = App;
+			path = App;
+			sourceTree = "<group>";
+		};
+		C38C20169ED43C444FCEFA93 = {
+			isa = PBXGroup;
+			children = (
+				731F1659BF8BCBF7190B39E5 /* Products */,
+				56D88FBB009AE0B1D2BB3636 /* Frameworks */,
+				A29AE12A441E66799C406778 /* App */,
+				4148638267B5EA31DB1CEA93 /* RelayCLI */,
+			);
+			sourceTree = "<group>";
+		};
+		E1ACC3F711D5697AD4F4F2EB /* OS X */ = {
+			isa = PBXGroup;
+			children = (
+				2CA20CACDC9D3F7E4A983DE6 /* Cocoa.framework */,
+			);
+			name = "OS X";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		34EB863F1058363B25237BB7 /* Relay */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8FD6ED220155D2976D72025F /* Build configuration list for PBXNativeTarget "Relay" */;
+			buildPhases = (
+				D7176F707A17C3C0B7410C1D /* Sources */,
+				66D271B36A12C71188A35A49 /* Frameworks */,
+				B6AF37A6CF76A16E17E0F7E9 /* Resources */,
+				2D5D7BE75925B82C780B5C5D /* Embed macOS agent CLI */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				182723C87C17ABDBF501E56C /* PBXTargetDependency */,
+			);
+			name = Relay;
+			packageProductDependencies = (
+				AC8A7D3D380D5079E64C7374 /* RelayCore */,
+			);
+			productName = Relay;
+			productReference = 9738020AE98E0D4FBE44853A /* Relay.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8BEF58C10EEE68B4F01957AA /* RelayAgentTool */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 009223EC90E293609217CDC1 /* Build configuration list for PBXNativeTarget "RelayAgentTool" */;
+			buildPhases = (
+				B805D1097076142DF01387EA /* Sources */,
+				4A979512E157B53DFCFFD0A6 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RelayAgentTool;
+			packageProductDependencies = (
+				5B2F4EADB7E44397E32BAB16 /* RelayCore */,
+			);
+			productName = RelayAgentTool;
+			productReference = 2485AF70E8804E2B387F633D /* relay */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		434707AADF4F03C36663B595 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 7DD02706BC318935C40F57F2 /* Build configuration list for PBXProject "Relay" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = C38C20169ED43C444FCEFA93;
+			minimizedProjectReferenceProxies = 0;
+			packageReferences = (
+				C423FED7FD3D0C9A2F191FF9 /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 731F1659BF8BCBF7190B39E5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				34EB863F1058363B25237BB7 /* Relay */,
+				8BEF58C10EEE68B4F01957AA /* RelayAgentTool */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B6AF37A6CF76A16E17E0F7E9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				74ABE8A8A493C2959CF76026 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B805D1097076142DF01387EA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A6B90F94628D87FE628923C /* MCP.swift in Sources */,
+				0C78A5D53E9E1DEA15542771 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D7176F707A17C3C0B7410C1D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				17DB29E2D1802F4F9287884C /* Editor.swift in Sources */,
+				8AAC00251AC0F8F3EE75EA70 /* RelayApp.swift in Sources */,
+				A2428E26DDF87F25AD7468E5 /* WorkspaceModel.swift in Sources */,
+				6D0D7B0705925FC59607994A /* WorkspaceViews.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		182723C87C17ABDBF501E56C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RelayAgentTool;
+			platformFilter = macos;
+			target = 8BEF58C10EEE68B4F01957AA /* RelayAgentTool */;
+			targetProxy = 6C6A1EB36E9AB50E8B343AFE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2F6900C7BE7CC380EADFEB44 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = relay;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5D02580C78F0250777ADA2BD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		7DCF11D220F34EBEAE7B3E53 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		8274C1A5D4A9A81378100378 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = relay;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D3C45D3FF19A31C205CED87F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				EXECUTABLE_NAME = RelayWorkspace;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Relay Workspace";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.wang-sy.RelayWorkspace";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		EB0879EF3B83324E0CF63810 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				EXECUTABLE_NAME = RelayWorkspace;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Relay Workspace";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.wang-sy.RelayWorkspace";
+				SDKROOT = auto;
+				SUPPORTED_PLATFORMS = "macosx iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		009223EC90E293609217CDC1 /* Build configuration list for PBXNativeTarget "RelayAgentTool" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2F6900C7BE7CC380EADFEB44 /* Release */,
+				8274C1A5D4A9A81378100378 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7DD02706BC318935C40F57F2 /* Build configuration list for PBXProject "Relay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5D02580C78F0250777ADA2BD /* Debug */,
+				7DCF11D220F34EBEAE7B3E53 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8FD6ED220155D2976D72025F /* Build configuration list for PBXNativeTarget "Relay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EB0879EF3B83324E0CF63810 /* Release */,
+				D3C45D3FF19A31C205CED87F /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C423FED7FD3D0C9A2F191FF9 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5B2F4EADB7E44397E32BAB16 /* RelayCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C423FED7FD3D0C9A2F191FF9 /* XCLocalSwiftPackageReference "." */;
+			productName = RelayCore;
+		};
+		AC8A7D3D380D5079E64C7374 /* RelayCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C423FED7FD3D0C9A2F191FF9 /* XCLocalSwiftPackageReference "." */;
+			productName = RelayCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 434707AADF4F03C36663B595 /* Project object */;
+}
