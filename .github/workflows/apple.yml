@@ -27,3 +27,20 @@ jobs:
         with:
           name: apple-mobile-previews
           path: ${{ runner.temp }}/previews/*.png
+  installer:
+    needs: native
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package universal macOS installer
+        run: Scripts/package-mac.sh
+        env:
+          RELAY_ARCHS: arm64 x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Relay-Workspace-macOS
+          path: dist/Relay-Workspace-macOS.dmg
+          if-no-files-found: error

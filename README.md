@@ -6,6 +6,8 @@ Relay 把方向、已排期需求和独立 Task 放在同一棵树上。探索�
 
 ## 安装
 
+下载预编译 Mac 版时，在最近成功的 [Apple clients 构建](https://github.com/wang-sy/relay-workspace/actions/workflows/apple.yml)中打开 Artifacts，选择 **Relay-Workspace-macOS**。解压后打开磁盘映像，把应用拖入“应用程序”。预览安装包采用 ad hoc 签名，未做 Developer ID 公证。
+
 - **Mac** 需要 macOS 14 或更高版本和 Swift 5.9+ 工具链。在项目根目录运行 `Scripts/package-mac.sh`。打开 `dist/Relay-Workspace-macOS.dmg`，将 Relay Workspace 拖入“应用程序”。本机构建采用 ad hoc 签名。要同时生成 Apple Silicon 和 Intel 二进制，可以设置 `RELAY_ARCHS="arm64 x86_64"`。
 - **iPhone 和 iPad** 需要 iOS / iPadOS 17 或更高版本。用完整 Xcode 打开 `Relay.xcodeproj`，选择 `Relay` scheme 和对应的模拟器，运行即可。装到自己的真机时，在 Signing & Capabilities 选择自己的开发团队，必要时换成团队可用的 Bundle ID。这个工程使用同一套原生主从导航，窄屏逐层进入，宽屏显示侧栏。
 - **Mac 开发** 也可以运行同一个 Xcode scheme。运行 `swift test` 验证核心逻辑。CI 另行构建 Mac 应用，在 iPhone 和 iPad 模拟器安装、启动并保留截图。

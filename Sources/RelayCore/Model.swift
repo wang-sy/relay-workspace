@@ -136,6 +136,10 @@ public struct Workspace: Codable, Sendable {
       guard let item = items[c.itemID], !item.closed, item.kind != .idea else { continue }
       var label: String?
       switch c.operation {
+      case .create
+      where item.kind == .requirement
+        && (item.end ?? .distantFuture) < Calendar.current.startOfDay(for: now):
+        label = "计划结束日已过"
       case .pause where item.pauseID == e.id && now.timeIntervalSince(e.time) >= 3 * 86400:
         let scheduled = entries.contains {
           $0.change.itemID == item.id && $0.change.operation == .remind

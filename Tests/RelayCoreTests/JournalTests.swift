@@ -66,5 +66,9 @@ final class JournalTests: XCTestCase {
     XCTAssertEqual(state.items["IDEA-01"]?.kind, .requirement)
     XCTAssertEqual(state.items["IDEA-01"]?.members.first?.role, "采访")
     XCTAssertEqual(state.history("IDEA-01").count, 2)
+    let later = Date().addingTimeInterval(4 * 86400)
+    XCTAssertTrue(
+      state.gaps(at: later).contains { $0.itemID == "IDEA-01" && $0.label == "计划结束日已过" })
+
   }
 }
