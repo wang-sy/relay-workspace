@@ -210,20 +210,22 @@ struct WorkspaceView: View {
 
   private var sidebar: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(spacing: 9) {
-        ZStack {
-          RoundedRectangle(cornerRadius: 9).fill(
-            LinearGradient(
-              colors: [RelayPalette.rgb(0x625AD4), RelayPalette.rgb(0x383478)],
-              startPoint: .topLeading, endPoint: .bottomTrailing))
-          HStack(spacing: 2.5) {
-            Capsule().fill(.white.opacity(0.64)).frame(width: 5.5, height: 12).offset(y: -2)
-            Capsule().fill(.white).frame(width: 6.5, height: 17).offset(y: 1)
-          }.rotationEffect(.degrees(34))
-        }.frame(width: 31, height: 31).accessibilityHidden(true)
-        Text("Relay").font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(
-          RelayPalette.primary)
-      }.padding(.horizontal, 17).padding(.top, 10).padding(.bottom, 12)
+      #if os(macOS)
+        HStack(spacing: 9) {
+          ZStack {
+            RoundedRectangle(cornerRadius: 9).fill(
+              LinearGradient(
+                colors: [RelayPalette.rgb(0x625AD4), RelayPalette.rgb(0x383478)],
+                startPoint: .topLeading, endPoint: .bottomTrailing))
+            HStack(spacing: 2.5) {
+              Capsule().fill(.white.opacity(0.64)).frame(width: 5.5, height: 12).offset(y: -2)
+              Capsule().fill(.white).frame(width: 6.5, height: 17).offset(y: 1)
+            }.rotationEffect(.degrees(34))
+          }.frame(width: 31, height: 31).accessibilityHidden(true)
+          Text("Relay").font(.system(size: 23, weight: .bold, design: .rounded)).foregroundStyle(
+            RelayPalette.primary)
+        }.padding(.horizontal, 17).padding(.top, 10).padding(.bottom, 12)
+      #endif
       List(selection: $selection) {
         Section("团队") { ForEach([Page.overview, .directions, .ideas]) { sidebarLink($0) } }
         Section("个人") { ForEach([Page.mine, .reminders]) { sidebarLink($0) } }
