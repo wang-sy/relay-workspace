@@ -29,6 +29,7 @@ struct Editor: View {
     self.target = target
     _operation = State(initialValue: target.operation)
     _kind = State(initialValue: target.kind)
+    _reference = State(initialValue: target.reference)
     let existing = target.operation == .create ? nil : target.item
     _status = State(initialValue: existing?.status ?? "待推进")
     _next = State(initialValue: existing?.next ?? "")
@@ -52,7 +53,9 @@ struct Editor: View {
       Form {
         if operation == .create {
           Picker("类型", selection: $kind) {
-            ForEach(ItemKind.allCases, id: \.self) { Text($0.label).tag($0) }
+            ForEach(ItemKind.allCases, id: \.self) {
+              Text($0 == .idea ? "探索 / 待办" : $0.label).tag($0)
+            }
           }
           TextField("事项标题", text: $title)
         } else if let item = target.item {
@@ -63,7 +66,8 @@ struct Editor: View {
             Picker("发生了什么", selection: $operation) {
               ForEach(
                 [
-                  WorkOperation.update, .pause, .resume, .milestone, .result, .handoff, .acknowledge,
+                  WorkOperation.update, .pause, .resume, .milestone, .result, .handoff,
+                  .acknowledge,
                   .close,
                 ], id: \.self
               ) { Text($0.label).tag($0) }

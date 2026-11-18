@@ -4,12 +4,33 @@ import RelayCore
 import SwiftUI
 import UserNotifications
 
+enum DeviceNotificationStatus: Equatable {
+  case reading, needsPermission, denied, authorized
+  case unavailable(String)
+
+  var text: String {
+    switch self {
+    case .reading: return "正在读取通知设置"
+    case .needsPermission: return "尚未授权本机通知"
+    case .denied:
+      #if os(macOS)
+        return "系统通知已关闭。前往“系统设置”里的“通知”，选择 Relay Workspace 后打开“允许通知”。"
+      #else
+        return "系统通知已关闭。前往“设置”里的“通知”，选择 Relay Workspace 后打开“允许通知”。"
+      #endif
+    case .authorized: return "已获系统授权"
+    case .unavailable(let reason): return reason
+    }
+  }
+}
+
 @MainActor
 final class WorkspaceModel: ObservableObject {
   @Published private(set) var state = Workspace()
   @Published private(set) var root = Journal.local.root
   @Published var problem: String?
-  @Published var notificationText = "读取系统设置中"
+  @Published private(set) var notificationStatus = DeviceNotificationStatus.reading
+  @Published private(set) var notificationRequestError: String?
   @Published var actor: String {
     didSet { UserDefaults.standard.set(actor, forKey: "relay.actor") }
   }
@@ -105,12 +126,26 @@ final class WorkspaceModel: ObservableObject {
     let journal = Journal(root)
     readSerial += 1
     let serial = readSerial
+    let snapshot: Workspace
     do {
-      let snapshot = try await Task.detached(priority: .utility) { try journal.read() }.value
-      guard version == generation, serial == readSerial else { return }
-      state = snapshot
-      notificationText = try await alerts.reconcile(snapshot, actor: actor, root: root)
-    } catch { if version == generation { problem = error.localizedDescription } }
+      snapshot = try await Task.detached(priority: .utility) { try journal.read() }.value
+    } catch {
+      if version == generation, serial == readSerial { problem = error.localizedDescription }
+      return
+    }
+    guard version == generation, serial == readSerial else { return }
+    state = snapshot
+    do {
+      let status = try await alerts.reconcile(snapshot, actor: actor, root: root)
+      if version == generation, serial == readSerial {
+        notificationStatus = status
+        if status != .needsPermission { notificationRequestError = nil }
+      }
+    } catch {
+      if version == generation, serial == readSerial {
+        notificationStatus = .unavailable(notificationMessage(error))
+      }
+    }
   }
 
   func submit(_ change: Change, id: UUID) async throws {
@@ -123,26 +158,37 @@ final class WorkspaceModel: ObservableObject {
     await refresh()
   }
   func authorizeNotifications() async {
+    notificationRequestError = nil
     do {
       _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [
         .alert, .sound,
       ])
       await refresh()
-    } catch { problem = error.localizedDescription }
+    } catch { notificationRequestError = notificationMessage(error) }
+  }
+
+  private func notificationMessage(_ error: Error) -> String {
+    let cause = error as NSError
+    if cause.domain == UNErrorDomain, cause.code == UNError.Code.notificationsNotAllowed.rawValue {
+      return "系统未允许此应用发送通知。可以在系统通知设置中查看 Relay Workspace。"
+    }
+    return "本机通知暂不可用。" + cause.localizedDescription
   }
 }
 
 @MainActor
 private final class LocalAlerts: NSObject, UNUserNotificationCenterDelegate {
-  func reconcile(_ state: Workspace, actor: String, root: URL) async throws -> String {
-    guard Bundle.main.bundleIdentifier != nil else { return "在应用程序包内启用通知" }
+  func reconcile(_ state: Workspace, actor: String, root: URL) async throws
+    -> DeviceNotificationStatus
+  {
+    guard Bundle.main.bundleIdentifier != nil else { return .unavailable("在应用程序包内启用通知") }
     let center = UNUserNotificationCenter.current()
     center.delegate = self
     let settings = await center.notificationSettings()
     guard
       settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
     else {
-      return settings.authorizationStatus == .denied ? "系统通知已关闭" : "尚未授权"
+      return settings.authorizationStatus == .denied ? .denied : .needsPermission
     }
     let namespace = SHA256.hash(data: Data(root.standardizedFileURL.path.utf8)).prefix(8).map {
       String(format: "%02x", $0)
@@ -180,7 +226,7 @@ private final class LocalAlerts: NSObject, UNUserNotificationCenterDelegate {
       registered.insert(id)
       UserDefaults.standard.set(Array(registered), forKey: key)
     }
-    return "已获系统授权"
+    return .authorized
   }
 
   nonisolated func userNotificationCenter(
