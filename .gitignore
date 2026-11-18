@@ -5,3 +5,6 @@ dist/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+server/node_modules/
+server/data/
+server/.env

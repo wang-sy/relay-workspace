@@ -28,6 +28,7 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$icons" -o "$app/Contents/Resources/Relay.icns"
 cp Scripts/MacInfo.plist "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c 'Merge Scripts/NetworkInfo.plist' "$app/Contents/Info.plist"
 codesign --force --sign - "$app/Contents/MacOS/relay"
 codesign --force --sign - "$app"
 codesign --verify --strict --deep "$app"

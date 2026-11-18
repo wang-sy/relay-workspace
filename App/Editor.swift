@@ -121,7 +121,7 @@ struct Editor: View {
     #endif
     .onAppear {
       parent = target.operation == .create ? target.item?.id ?? "" : target.item?.parentID ?? ""
-      recipient = model.actor
+      recipient = model.currentActor
       conditional = target.item?.pauseID != nil
     }
     .onChange(of: kind) { _, _ in

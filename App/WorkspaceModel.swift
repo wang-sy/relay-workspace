@@ -28,18 +28,30 @@ enum DeviceNotificationStatus: Equatable {
 final class WorkspaceModel: ObservableObject {
   @Published private(set) var state = Workspace()
   @Published private(set) var root = Journal.local.root
+  @Published private(set) var serverAddress: String?
+  @Published private(set) var serverIssue: String?
+  @Published private(set) var hasSnapshot = false
+  @Published private(set) var viewer: String?
   @Published var problem: String?
   @Published private(set) var notificationStatus = DeviceNotificationStatus.reading
   @Published private(set) var notificationRequestError: String?
   @Published var actor: String {
     didSet { UserDefaults.standard.set(actor, forKey: "relay.actor") }
   }
+  var currentActor: String { viewer ?? actor }
+  var workspaceLabel: String {
+    if let serverAddress { return URL(string: serverAddress)?.host ?? serverAddress }
+    return root == Journal.local.root ? "本机工作空间" : root.lastPathComponent
+  }
+  var usesSavedToken: Bool { serverAddress.map(hasToken) ?? false }
   private let alerts = LocalAlerts()
+  private var journal: WorkspaceJournal?
   private var grant: URL?
-  private var ready = false
   private var started = false
   private var generation = 0
+  private var choice = 0
   private var readSerial = 0
+  private var etag: String?
 
   init() {
     #if os(macOS)
@@ -47,12 +59,29 @@ final class WorkspaceModel: ObservableObject {
     #else
       let defaultActor = "我"
     #endif
-    actor = UserDefaults.standard.string(forKey: "relay.actor") ?? defaultActor
+    let defaults = UserDefaults.standard
+    actor = defaults.string(forKey: "relay.actor") ?? defaultActor
+    let mode = defaults.string(forKey: "relay.mode")
+    if mode == "server" || (mode != "folder" && defaults.data(forKey: "relay.folder") == nil) {
+      serverAddress = defaults.string(forKey: "relay.server") ?? RemoteJournal.defaultAddress
+    }
+  }
+
+  private func hasToken(_ address: String) -> Bool {
+    UserDefaults.standard.stringArray(forKey: "relay.savedTokens")?.contains(address) == true
   }
 
   func start() async {
     guard !started else { return }
     started = true
+    if let serverAddress {
+      do {
+        let endpoint = try RemoteJournal.endpoint(serverAddress)
+        let token = hasToken(endpoint.absoluteString) ? try ServerCredentials.read(endpoint) : nil
+        journal = .server(try RemoteJournal(address: serverAddress, token: token))
+      } catch { serverIssue = error.localizedDescription }
+      return
+    }
     if let data = UserDefaults.standard.data(forKey: "relay.folder") {
       do {
         var stale = false
@@ -65,18 +94,47 @@ final class WorkspaceModel: ObservableObject {
           resolvingBookmarkData: data, options: options, relativeTo: nil,
           bookmarkDataIsStale: &stale)
         try attach(url)
-      } catch {
-        problem = "请在工作空间设置中重新选择共享文件夹。\(error.localizedDescription)"
-        return
-      }
+      } catch { problem = "请在工作空间设置中重新选择共享文件夹。\(error.localizedDescription)" }
     } else {
-      ready = true
-      do { try await Task.detached { try Journal.local.installExampleIfEmpty() }.value } catch {
-        problem = error.localizedDescription
-        return
-      }
+      journal = .folder(.local)
     }
-    await refresh()
+  }
+
+  private func reset(to source: WorkspaceJournal) {
+    generation += 1
+    journal = source
+    etag = nil
+    serverIssue = nil
+    viewer = nil
+    hasSnapshot = false
+    state = Workspace()
+  }
+
+  // Probe and decode the new service before replacing the active journal.
+  func connect(_ address: String, token newToken: String) async throws {
+    choice += 1
+    let attempt = choice
+    let url = try RemoteJournal.endpoint(address)
+    let supplied = newToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    let token =
+      supplied.isEmpty && hasToken(url.absoluteString) ? try ServerCredentials.read(url) : supplied
+    let remote = try RemoteJournal(address: url.absoluteString, token: token)
+    let update = try await remote.read()
+    guard attempt == choice else { throw CancellationError() }
+    if !supplied.isEmpty {
+      try ServerCredentials.save(supplied, for: url)
+      var saved = Set(UserDefaults.standard.stringArray(forKey: "relay.savedTokens") ?? [])
+      saved.insert(url.absoluteString)
+      UserDefaults.standard.set(Array(saved), forKey: "relay.savedTokens")
+    }
+    grant?.stopAccessingSecurityScopedResource()
+    grant = nil
+    reset(to: .server(remote))
+    serverAddress = url.absoluteString
+    UserDefaults.standard.set(url.absoluteString, forKey: "relay.server")
+    UserDefaults.standard.set("server", forKey: "relay.mode")
+    apply(update)
+    await updateNotifications(version: generation, serial: readSerial)
   }
 
   private func attach(_ url: URL) throws {
@@ -98,12 +156,11 @@ final class WorkspaceModel: ObservableObject {
     grant?.stopAccessingSecurityScopedResource()
     grant = scoped ? url : nil
     root = url
-    ready = true
-    generation += 1
-    state = Workspace()
+    reset(to: .folder(Journal(url)))
   }
 
   func select(_ url: URL?) async {
+    choice += 1
     do {
       if let url {
         try attach(url)
@@ -111,32 +168,50 @@ final class WorkspaceModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "relay.folder")
         grant?.stopAccessingSecurityScopedResource()
         grant = nil
-        generation += 1
         root = Journal.local.root
-        ready = true
-        state = Workspace()
+        reset(to: .folder(.local))
       }
+      serverAddress = nil
+      UserDefaults.standard.set("folder", forKey: "relay.mode")
       await refresh()
     } catch { problem = error.localizedDescription }
   }
 
+  private func apply(_ update: JournalUpdate) {
+    if let snapshot = update.workspace {
+      state = snapshot
+      viewer = update.viewer
+      hasSnapshot = true
+    }
+    etag = update.etag
+    serverIssue = nil
+  }
+
   func refresh() async {
-    guard ready else { return }
+    guard let journal else { return }
     let version = generation
-    let journal = Journal(root)
     readSerial += 1
     let serial = readSerial
-    let snapshot: Workspace
     do {
-      snapshot = try await Task.detached(priority: .utility) { try journal.read() }.value
+      let update = try await journal.read(ifNoneMatch: etag)
+      guard version == generation, serial == readSerial else { return }
+      apply(update)
     } catch {
-      if version == generation, serial == readSerial { problem = error.localizedDescription }
+      guard version == generation, serial == readSerial, !Task.isCancelled else { return }
+      if serverAddress != nil {
+        serverIssue = error.localizedDescription
+      } else {
+        problem = error.localizedDescription
+      }
       return
     }
-    guard version == generation, serial == readSerial else { return }
-    state = snapshot
+    await updateNotifications(version: version, serial: serial)
+  }
+
+  private func updateNotifications(version: Int, serial: Int) async {
+    let scope = serverAddress ?? root.standardizedFileURL.path
     do {
-      let status = try await alerts.reconcile(snapshot, actor: actor, root: root)
+      let status = try await alerts.reconcile(state, actor: currentActor, scope: scope)
       if version == generation, serial == readSerial {
         notificationStatus = status
         if status != .needsPermission { notificationRequestError = nil }
@@ -149,12 +224,9 @@ final class WorkspaceModel: ObservableObject {
   }
 
   func submit(_ change: Change, id: UUID) async throws {
-    guard ready else { throw RelayError("请先选择可用的工作空间") }
-    let journal = Journal(root)
-    let writer = actor.trimmingCharacters(in: .whitespacesAndNewlines)
-    _ = try await Task.detached {
-      try journal.append(change, id: id, actor: writer, source: "Relay App")
-    }.value
+    guard let journal else { throw RelayError("请先连接工作空间") }
+    let writer = currentActor.trimmingCharacters(in: .whitespacesAndNewlines)
+    _ = try await journal.append(change, id: id, actor: writer, source: "Relay App")
     await refresh()
   }
   func authorizeNotifications() async {
@@ -178,7 +250,7 @@ final class WorkspaceModel: ObservableObject {
 
 @MainActor
 private final class LocalAlerts: NSObject, UNUserNotificationCenterDelegate {
-  func reconcile(_ state: Workspace, actor: String, root: URL) async throws
+  func reconcile(_ state: Workspace, actor: String, scope: String) async throws
     -> DeviceNotificationStatus
   {
     guard Bundle.main.bundleIdentifier != nil else { return .unavailable("在应用程序包内启用通知") }
@@ -190,7 +262,7 @@ private final class LocalAlerts: NSObject, UNUserNotificationCenterDelegate {
     else {
       return settings.authorizationStatus == .denied ? .denied : .needsPermission
     }
-    let namespace = SHA256.hash(data: Data(root.standardizedFileURL.path.utf8)).prefix(8).map {
+    let namespace = SHA256.hash(data: Data(scope.utf8)).prefix(8).map {
       String(format: "%02x", $0)
     }.joined()
     let prefix = "relay." + namespace + "."

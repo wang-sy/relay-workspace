@@ -58,7 +58,7 @@ private let descriptors: [Object] = [
   ],
 ]
 
-func serveMCP(_ tools: AgentTools) {
+func serveMCP(_ tools: AgentTools) async {
   func reply(_ id: Any, _ key: String, _ payload: Any) {
     let message: Object = ["jsonrpc": "2.0", "id": id, key: payload]
     if var data = try? JSONSerialization.data(withJSONObject: message) {
@@ -101,8 +101,9 @@ func serveMCP(_ tools: AgentTools) {
       do {
         let data: Data
         switch p["name"] as? String {
-        case "relay_read": data = try tools.read(args["scope"] as? String ?? "workspace")
-        case "relay_apply": data = try tools.write(JSONSerialization.data(withJSONObject: args))
+        case "relay_read": data = try await tools.read(args["scope"] as? String ?? "workspace")
+        case "relay_apply":
+          data = try await tools.write(JSONSerialization.data(withJSONObject: args))
         default:
           reply(id, "error", ["code": -32602, "message": "Unknown tool"])
           continue

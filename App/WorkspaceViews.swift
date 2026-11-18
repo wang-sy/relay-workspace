@@ -117,13 +117,17 @@ struct WorkspaceView: View {
   @State private var compact: NavigationSplitViewColumn = .detail
   @State private var edit: EditTarget?
   @State private var picking = false
+  @State private var serverDraft = ""
+  @State private var tokenDraft = ""
+  @State private var connecting = false
+  @State private var connectionMessage: String?
 
   var body: some View {
     NavigationSplitView(preferredCompactColumn: $compact) {
       sidebar
     } detail: {
       NavigationStack(path: $path) {
-        pageBody.navigationTitle((selection ?? .overview).rawValue)
+        connectedPage.navigationTitle((selection ?? .overview).rawValue)
           #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
           #endif
@@ -136,7 +140,9 @@ struct WorkspaceView: View {
           }
           .navigationDestination(for: OverviewList.self) { OverviewListPage(list: $0) }
           .toolbar {
-            if selection != .settings && path.isEmpty {
+            if selection != .settings && path.isEmpty
+              && (model.serverAddress == nil || model.hasSnapshot)
+            {
               Button {
                 edit = EditTarget(nil, .create, selection == .ideas ? .idea : .direction)
               } label: {
@@ -175,6 +181,33 @@ struct WorkspaceView: View {
     }
   }
 
+  @ViewBuilder private var connectedPage: some View {
+    if selection != .settings && model.serverAddress != nil && !model.hasSnapshot {
+      if let issue = model.serverIssue {
+        ContentUnavailableView {
+          Label("无法连接团队服务", systemImage: "network.slash")
+        } description: {
+          Text((model.serverAddress ?? "") + "\n" + issue)
+        } actions: {
+          Button("工作空间设置") { selection = .settings }
+          Button("重试") { Task { await model.refresh() } }
+        }
+      } else {
+        ProgressView("正在连接团队服务…").frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+    } else {
+      pageBody.safeAreaInset(edge: .top, spacing: 0) {
+        if selection != .settings, model.serverIssue != nil {
+          HStack {
+            Label("连接已中断，正在显示上次同步的记录", systemImage: "wifi.slash")
+            Spacer()
+            Button("连接设置") { selection = .settings }
+          }.font(.callout).padding(8).background(.regularMaterial)
+        }
+      }
+    }
+  }
+
   private var sidebar: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 9) {
@@ -197,11 +230,11 @@ struct WorkspaceView: View {
         Section { sidebarLink(.settings) }
       }.listStyle(.sidebar)
       HStack(spacing: 9) {
-        MemberMark(name: model.actor, size: 30)
+        MemberMark(name: model.currentActor, size: 30)
         VStack(alignment: .leading, spacing: 2) {
-          Text(model.actor.isEmpty ? "未署名" : model.actor)
+          Text(model.currentActor.isEmpty ? "未署名" : model.currentActor)
             .font(.subheadline.weight(.semibold)).lineLimit(1)
-          Text(model.root == Journal.local.root ? "本机工作空间" : model.root.lastPathComponent)
+          Text(model.workspaceLabel)
             .font(.caption).foregroundStyle(RelayPalette.secondary).lineLimit(1)
         }
       }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
@@ -264,11 +297,11 @@ struct WorkspaceView: View {
       }
     case .mine:
       let handoffs = model.state.entries.filter {
-        $0.change.operation == .handoff && $0.change.recipient == model.actor
+        $0.change.operation == .handoff && $0.change.recipient == model.currentActor
           && !model.state.resolved($0.id)
       }
       let active = all.filter {
-        !$0.closed && $0.members.contains(where: { $0.name == model.actor })
+        !$0.closed && $0.members.contains(where: { $0.name == model.currentActor })
       }
       RelayPage { _ in
         RelayPanel(spacing: 5) {
@@ -335,31 +368,69 @@ struct WorkspaceView: View {
 
   private var settings: some View {
     Form {
-      Section("当前工作空间") {
-        Text(model.root.lastPathComponent).font(.headline)
-        Text(model.root.path).font(.caption.monospaced()).textSelection(.enabled)
-        Button("选择共享文件夹…") { picking = true }
-        Button("使用设备本地工作空间") {
+      Section("后台服务") {
+        TextField("服务地址", text: $serverDraft)
+          #if os(iOS)
+            .textInputAutocapitalization(.never).keyboardType(.URL).autocorrectionDisabled()
+          #endif
+        SecureField("Relay 成员令牌（本机演示可留空）", text: $tokenDraft)
+        Button(connecting ? "正在连接…" : "连接服务") {
+          connecting = true
+          connectionMessage = nil
+          Task {
+            defer { connecting = false }
+            do {
+              try await model.connect(serverDraft, token: tokenDraft)
+              tokenDraft = ""
+              serverDraft = model.serverAddress ?? serverDraft
+              connectionMessage = "已连接团队工作空间"
+            } catch { connectionMessage = error.localizedDescription }
+          }
+        }.disabled(
+          connecting || serverDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        if let message = connectionMessage ?? model.serverIssue {
+          Text(message).font(.caption).foregroundStyle(.secondary)
+        }
+        if let address = model.serverAddress {
+          LabeledContent("当前服务", value: address)
+          if model.usesSavedToken {
+            Text("已为此地址保存成员令牌。留空会沿用钥匙串中的令牌。").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+      }
+      Section("本地文件工作空间") {
+        if model.serverAddress == nil {
+          Text(model.root.path).font(.caption.monospaced()).textSelection(.enabled)
+        }
+        Button("打开已有文件夹…") { picking = true }
+        Button("打开设备本地记录") {
           Task {
             await model.select(nil)
             path = NavigationPath()
           }
         }
-        Text("在 Mac 和移动设备上选择同一个已共享的 iCloud Drive 文件夹。各端读取其中的工作记录。").font(.caption).foregroundStyle(
-          .secondary)
+        Text("文件模式可以查看或继续使用旧记录。要迁移到团队服务，可使用仓库里的 import-journal 命令。")
+          .font(.caption).foregroundStyle(.secondary)
       }
       Section("此设备的成员标签") {
-        TextField("成员名", text: $model.actor)
-        Text("用于本机署名及提醒匹配。事项角色由每条工作记录填写。").font(.caption).foregroundStyle(.secondary)
+        if let viewer = model.viewer {
+          LabeledContent("服务确认的成员", value: viewer)
+        } else {
+          TextField("成员名", text: $model.actor)
+          Text("用于本地记录或本机演示服务署名。").font(.caption).foregroundStyle(.secondary)
+        }
       }
       #if os(macOS)
         Section("接入本地 Agent") {
           Text("在终端执行以下命令，为 Codex 连接此工作空间。其他支持 stdio MCP 的客户端可以使用相同程序和参数。")
-          let folder = model.root.path
+          let destination =
+            model.serverAddress.map {
+              "--server " + quote($0) + (model.usesSavedToken ? " --keychain" : "")
+            } ?? ("--workspace " + quote(model.root.path))
           let tool = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/relay").path
           let command =
-            "codex mcp add relay --env " + quote("RELAY_ACTOR=" + model.actor) + " -- "
-            + quote(tool) + " --workspace " + quote(folder) + " mcp"
+            "codex mcp add relay --env " + quote("RELAY_ACTOR=" + model.currentActor) + " -- "
+            + quote(tool) + " " + destination + " mcp"
           Text(command).font(.caption.monospaced()).textSelection(.enabled)
           Button("复制接入命令") {
             NSPasteboard.general.clearContents()
@@ -371,6 +442,13 @@ struct WorkspaceView: View {
         Section("待核对的记录") { ForEach(model.state.conflicts, id: \.self) { Text($0).font(.caption) } }
       }
     }.formStyle(.grouped)
+      .onAppear {
+        serverDraft =
+          model.serverAddress ?? UserDefaults.standard.string(forKey: "relay.server")
+          ?? RemoteJournal.defaultAddress
+        tokenDraft = ""
+        connectionMessage = nil
+      }
   }
   private func quote(_ text: String) -> String {
     "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"

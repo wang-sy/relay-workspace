@@ -422,6 +422,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				EXECUTABLE_NAME = RelayWorkspace;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Scripts/NetworkInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Relay Workspace";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -450,6 +451,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				EXECUTABLE_NAME = RelayWorkspace;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Scripts/NetworkInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Relay Workspace";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
