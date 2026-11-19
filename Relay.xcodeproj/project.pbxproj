@@ -10,6 +10,7 @@
 		0C78A5D53E9E1DEA15542771 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F025A9C363E120137A7E424 /* main.swift */; };
 		1F635A86151BC49324CFFE44 /* relay in Embed macOS agent CLI */ = {isa = PBXBuildFile; fileRef = 2485AF70E8804E2B387F633D /* relay */; platformFilter = macos; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		88937F69F47B48EB893F3313 /* ItemDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */; };
+		C41000000000000000000003 /* ItemContextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41000000000000000000004 /* ItemContextView.swift */; };
 		F95AE34ECD16618E6CBB3FD1 /* RequirementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDB350688653D25D92F134F /* RequirementCards.swift */; };
 		9E3A4B7AF31848A8B0770DF3 /* RequirementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38F4117D0F8466694D2C9E0 /* RequirementsView.swift */; };
 		0C335DA6F283446180B1A721 /* HostedFunctionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93AA26AE2A094A459AA9F0A4 /* HostedFunctionsView.swift */; };
@@ -20,6 +21,7 @@
 		CBB3ACF45D4641DDA38CF9D1 /* AssistantSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA8A9D42E13545EDB21DB190 /* AssistantSetupView.swift */; };
 		74ABE8A8A493C2959CF76026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 71357F4C8F183087B9274828 /* Assets.xcassets */; };
 		7A6B90F94628D87FE628923C /* MCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD804C6A536121D7C2690AA /* MCP.swift */; };
+		C41000000000000000000001 /* AgentContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = C41000000000000000000002 /* AgentContext.swift */; };
 		8AAC00251AC0F8F3EE75EA70 /* RelayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 240C9D7DCDC0BE1D93501072 /* RelayApp.swift */; };
 		A2428E26DDF87F25AD7468E5 /* WorkspaceModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF913EB576F80EC27F5A204E /* WorkspaceModel.swift */; };
 		CE70DBA02AF3919788424B2A /* RelayCore in Frameworks */ = {isa = PBXBuildFile; productRef = AC8A7D3D380D5079E64C7374 /* RelayCore */; };
@@ -56,9 +58,11 @@
 		2CA20CACDC9D3F7E4A983DE6 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		2F025A9C363E120137A7E424 /* main.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		3AD804C6A536121D7C2690AA /* MCP.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MCP.swift; sourceTree = "<group>"; };
+		C41000000000000000000002 /* AgentContext.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AgentContext.swift; sourceTree = "<group>"; };
 		71357F4C8F183087B9274828 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9738020AE98E0D4FBE44853A /* Relay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Relay.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ItemDetails.swift; sourceTree = "<group>"; };
+		C41000000000000000000004 /* ItemContextView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ItemContextView.swift; sourceTree = "<group>"; };
 		8DDB350688653D25D92F134F /* RequirementCards.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequirementCards.swift; sourceTree = "<group>"; };
 		B38F4117D0F8466694D2C9E0 /* RequirementsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequirementsView.swift; sourceTree = "<group>"; };
 		93AA26AE2A094A459AA9F0A4 /* HostedFunctionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostedFunctionsView.swift; sourceTree = "<group>"; };
@@ -94,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				3AD804C6A536121D7C2690AA /* MCP.swift */,
+				C41000000000000000000002 /* AgentContext.swift */,
 				2F025A9C363E120137A7E424 /* main.swift */,
 			);
 			name = RelayCLI;
@@ -123,6 +128,7 @@
 				240C9D7DCDC0BE1D93501072 /* RelayApp.swift */,
 				DF913EB576F80EC27F5A204E /* WorkspaceModel.swift */,
 				30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */,
+				C41000000000000000000004 /* ItemContextView.swift */,
 				8DDB350688653D25D92F134F /* RequirementCards.swift */,
 				B38F4117D0F8466694D2C9E0 /* RequirementsView.swift */,
 				93AA26AE2A094A459AA9F0A4 /* HostedFunctionsView.swift */,
@@ -249,6 +255,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7A6B90F94628D87FE628923C /* MCP.swift in Sources */,
+				C41000000000000000000001 /* AgentContext.swift in Sources */,
 				0C78A5D53E9E1DEA15542771 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -260,6 +267,7 @@
 				8AAC00251AC0F8F3EE75EA70 /* RelayApp.swift in Sources */,
 				A2428E26DDF87F25AD7468E5 /* WorkspaceModel.swift in Sources */,
 				88937F69F47B48EB893F3313 /* ItemDetails.swift in Sources */,
+				C41000000000000000000003 /* ItemContextView.swift in Sources */,
 				F95AE34ECD16618E6CBB3FD1 /* RequirementCards.swift in Sources */,
 				9E3A4B7AF31848A8B0770DF3 /* RequirementsView.swift in Sources */,
 				0C335DA6F283446180B1A721 /* HostedFunctionsView.swift in Sources */,

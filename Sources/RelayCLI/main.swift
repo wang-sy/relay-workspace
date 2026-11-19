@@ -79,12 +79,14 @@ struct AgentTools {
 }
 
 let help = """
-  relay [--server URL [--keychain] | --workspace DIRECTORY] read | board | gaps | types | apply | sample | functions | mcp
+  relay [--server URL [--keychain] | --workspace DIRECTORY] read | board | gaps | types | apply | sample | functions | context | mcp
 
   board prints the team's requirement list. read and gaps print the workspace or omissions as JSON.
   apply reads one JSON write from stdin. mcp serves tools over stdio.
   types lists observed vocabulary and versioned templates. Use apply with defineType to publish a template.
   functions list | get ID | deploy < definition.json | enable ID REV | disable ID REV
+  context search QUERY | recall ITEM [--since ISO] | attach [--file PATH] [--pin-source] < reference.json
+  context list ITEM [--event EVENT] [--before CURSOR] | history ITEM [--since ISO] [--before CURSOR] | get REF | download REF OUTPUT | source REF [--keyword WORD]
   Hosted functions run in the service. get includes the JavaScript source and recent executions.
   Default server: http://127.0.0.1:8731. RELAY_SERVER_URL and RELAY_TOKEN configure a service.
   --keychain uses the token saved by the native app for this exact server URL.
@@ -110,7 +112,9 @@ do {
   let keychain = args.contains("--keychain")
   if keychain { args.removeAll { $0 == "--keychain" } }
   let command = args.first ?? "help"
-  guard command == "functions" || args.count <= 1 else { throw RelayError(help) }
+  guard ["functions", "context"].contains(command) || args.count <= 1 else {
+    throw RelayError(help)
+  }
   if ["help", "-h", "--help"].contains(command) {
     print(help)
     exit(0)
@@ -139,6 +143,7 @@ do {
   case "read", "board", "gaps", "types":
     data = try await tools.read(command == "read" ? "workspace" : command)
   case "apply": data = try await tools.write(FileHandle.standardInput.readDataToEndOfFile())
+  case "context": data = try await tools.contextCommand(Array(args.dropFirst()))
   case "functions": data = try await tools.functionCommand(Array(args.dropFirst()))
   case "sample":
     guard case .folder(let local) = journal else {

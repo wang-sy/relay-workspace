@@ -57,7 +57,7 @@ public struct RemoteJournal: Sendable {
     config.httpShouldSetCookies = false
     config.requestCachePolicy = .reloadIgnoringLocalCacheData
     config.timeoutIntervalForRequest = 10
-    config.timeoutIntervalForResource = 20
+    config.timeoutIntervalForResource = 120
     return URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
   }()
 
@@ -94,14 +94,14 @@ public struct RemoteJournal: Sendable {
     let change: Change
   }
 
-  private func request(_ path: String) -> URLRequest {
+  func request(_ path: String) -> URLRequest {
     var request = URLRequest(url: url.appendingPathComponent("v1").appendingPathComponent(path))
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     if let token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
     return request
   }
 
-  private func agentRequest(_ path: String) throws -> URLRequest {
+  func agentRequest(_ path: String) throws -> URLRequest {
     var req = request(path)
     req.setValue("agent", forHTTPHeaderField: "X-Relay-Client")
     // endpoint() allows plain HTTP only for loopback. Never send a local key to a remote service.
@@ -127,7 +127,7 @@ public struct RemoteJournal: Sendable {
     return req
   }
 
-  private func send(_ request: URLRequest, accepting codes: [Int]) async throws -> (
+  func send(_ request: URLRequest, accepting codes: [Int]) async throws -> (
     Data, HTTPURLResponse
   ) {
     let (data, response) = try await Self.transport.data(for: request)

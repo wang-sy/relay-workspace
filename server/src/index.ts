@@ -27,7 +27,7 @@ function poll() {
 if (process.env.RELAY_LOG_REQUESTS === "1") {
   server.prependListener("request", (req, res) => {
     const route = req.url?.split("?")[0];
-    if (route === "/v1/workspace" || route === "/v1/events" || route === "/v1/functions") {
+    if (route === "/v1/workspace" || route === "/v1/events" || route === "/v1/functions" || route === "/v1/context/recall") {
       res.once("finish", () => console.log(req.method, route, res.statusCode));
     }
   });

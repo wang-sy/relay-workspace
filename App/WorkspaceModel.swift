@@ -59,6 +59,7 @@ final class WorkspaceModel: ObservableObject {
   var usesSavedToken: Bool { serverAddress.map(hasToken) ?? false }
   private let alerts = LocalAlerts()
   private var journal: (any WorkspaceReading)?
+  var contextService: (any ContextReading)? { journal as? any ContextReading }
   var hostedService: (any HostedFunctionReading)? { journal as? any HostedFunctionReading }
   private var grant: URL?
   private var started = false

@@ -4,6 +4,8 @@ import { z } from "zod";
 import { ApiError, writeSchema } from "./domain.js";
 import type { JournalStore } from "./store.js";
 import { deploymentSchema, functionID, switchSchema } from "./function-contract.js";
+import { attachment, maxContextRequest } from "./context-contract.js";
+import { iso } from "./function-contract.js";
 import { validateCode } from "./function-runtime.js";
 
 const loopbacks = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
@@ -54,19 +56,19 @@ function authorize(request: IncomingMessage, keys: MemberKeys): MemberAccess | n
   return null;
 }
 
-async function readBody(request: IncomingMessage): Promise<unknown> {
+async function readBody(request: IncomingMessage, limit = 256 * 1024): Promise<unknown> {
   if (request.headers["content-type"]?.split(";")[0]?.trim() !== "application/json") {
     throw new ApiError(415, "Expected application/json");
   }
   const chunks: Buffer[] = [];
   let bytes = 0;
-  if (Number(request.headers["content-length"]) > 256 * 1024) throw new ApiError(413, "Write exceeds 256 KiB");
+  if (Number(request.headers["content-length"]) > limit) throw new ApiError(413, "请求超过此接口的大小限制");
   for await (const chunk of request.iterator({ destroyOnReturn: false })) {
     const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     bytes += data.length;
-    if (bytes > 256 * 1024) {
+    if (bytes > limit) {
       request.resume();
-      throw new ApiError(413, "Write exceeds 256 KiB");
+      throw new ApiError(413, "请求超过此接口的大小限制");
     }
     chunks.push(data);
   }
@@ -93,6 +95,67 @@ export function relayServer(store: JournalStore, host: string, keys: MemberKeys,
         if (request.headers["x-relay-client"] !== "agent") throw new ApiError(403, "请通过新版 Relay CLI 或 MCP 更新看板。");
         if (!access && (!localAgentKey || hash(bearer(request) ?? "") !== localAgentKey)) {
           throw new ApiError(403, "缺少本机 Agent 凭据。请在运行服务的账户下使用 Relay CLI 或 MCP。");
+        }
+      }
+      if (path?.startsWith("/v1/context/")) {
+        const params = new URLSearchParams(request.url?.split("?").slice(1).join("?"));
+        if (path === "/v1/context/references" && request.method === "POST") {
+          const raw = await readBody(request, maxContextRequest);
+          const body = viewer && raw && typeof raw === "object" ? { ...raw, actor: viewer } : raw;
+          const result = store.contexts.attach(attachment.parse(body));
+          return json(response, result.created ? 201 : 200, result.reference);
+        }
+        if (request.method === "GET") {
+          if (path === "/v1/context/search") {
+            const query = z.string().trim().min(1).max(240).parse(params.get("q"));
+            return json(response, 200, store.contexts.search(query));
+          }
+          const ref = /^\/v1\/context\/references\/([^/]+)(\/file)?$/.exec(path);
+          if (ref) {
+            const id = z.guid().parse(ref[1]).toLowerCase();
+            if (!ref[2]) return json(response, 200, store.contexts.get(id));
+            const file = store.contexts.bytes(id);
+            response.writeHead(200, {
+              "Content-Type": "application/octet-stream",
+              "Cache-Control": "private, no-store",
+              "X-Content-Type-Options": "nosniff",
+              "Content-Length": file.data.length,
+              "Content-Disposition":
+                "attachment; filename*=UTF-8''" +
+                encodeURIComponent(file.filename).replace(/['()*]/g, (c) => "%" + c.charCodeAt(0).toString(16)),
+            });
+            response.end(file.data);
+            return;
+          }
+          if (["/v1/context/recall", "/v1/context/history", "/v1/context/references"].includes(path)) {
+            const id = z.string().min(1).max(160).parse(params.get("itemID"));
+            const before = params.get("before");
+            if (path.endsWith("/references")) {
+              const cursor = before === null ? undefined : z.coerce.number().int().positive().safe().parse(before);
+              const event = params.get("eventID");
+              return json(
+                response,
+                200,
+                store.contexts.references(
+                  id,
+                  cursor,
+                  event === null ? undefined : z.guid().parse(event).toLowerCase(),
+                ),
+              );
+            }
+            const since = params.get("since");
+            const date =
+              since === null ? undefined : iso(Date.parse(z.iso.datetime({ offset: true }).parse(since)));
+            if (path.endsWith("/recall")) return json(response, 200, store.contexts.recall(id, date));
+            const cursor =
+              before === null
+                ? undefined
+                : z
+                    .string()
+                    .regex(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\|[er]\|\d{16}$/)
+                    .parse(before);
+            return json(response, 200, store.contexts.history(id, date, cursor));
+          }
         }
       }
       if (path === "/v1/functions" && request.method === "GET") return json(response, 200, store.functions.list());
@@ -138,7 +201,7 @@ export function relayServer(store: JournalStore, host: string, keys: MemberKeys,
       }
       throw new ApiError(404, "Route not found");
     } catch (error) {
-      if (error instanceof z.ZodError) return json(response, 422, { error: "Invalid function field: " + (error.issues[0]?.path.join(".") || "request") });
+      if (error instanceof z.ZodError) return json(response, 422, { error: "Invalid field: " + (error.issues[0]?.path.join(".") || "request") + " · " + (error.issues[0]?.message ?? "invalid value") });
       if (error instanceof ApiError) return json(response, error.status, { error: error.message });
       console.error("Relay could not complete a storage operation.");
       return json(response, 500, { error: "Workspace storage is unavailable" });

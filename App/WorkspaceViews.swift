@@ -74,6 +74,7 @@ private enum WorkspaceTool: String, Identifiable {
   case settings = "工作空间"
   case reminders = "提醒"
   case functions = "服务端自动化"
+  case lookup = "找回事项"
   var id: Self { self }
 }
 
@@ -163,6 +164,22 @@ struct WorkspaceView: View {
               selection = .directions
               tool = nil
             }
+          case .lookup:
+            if let service = model.contextService {
+              ContextSearchView(service: service) { id in
+                Task {
+                  if model.state.items[id] == nil { await model.refresh() }
+                  if model.state.items[id]?.behavior == .idea {
+                    selection = .ideas
+                    ideaPath = [id]
+                  } else {
+                    selection = .directions
+                    directionPath = [id]
+                  }
+                  tool = nil
+                }
+              }
+            }
           case .reminders: reminders
           case .functions:
             if let service = model.hostedService {
@@ -186,6 +203,14 @@ struct WorkspaceView: View {
         .frame(minWidth: 480, idealWidth: 700, minHeight: 400, idealHeight: 510)
       #endif
     }
+    #if os(iOS) && targetEnvironment(simulator) && DEBUG
+      .onChange(of: model.hasSnapshot, initial: true) { _, ready in
+        if ready && ProcessInfo.processInfo.arguments.contains("--preview-context") {
+          selection = .ideas
+          ideaPath = ["IDEA-01"]
+        }
+      }
+    #endif
     .onChange(of: model.serverAddress ?? model.root.path) { _, _ in
       directionPath = []
       ideaPath = []
@@ -236,6 +261,15 @@ struct WorkspaceView: View {
                 }
               }
             #endif
+            if model.contextService != nil && model.hasSnapshot {
+              ToolbarItem(placement: .primaryAction) {
+                Button {
+                  tool = .lookup
+                } label: {
+                  Label("找回事项", systemImage: "magnifyingglass")
+                }.help("按资料或线索找回事项")
+              }
+            }
             if model.hasSnapshot {
               ToolbarItem(placement: .primaryAction) {
                 Menu {

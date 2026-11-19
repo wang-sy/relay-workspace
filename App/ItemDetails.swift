@@ -31,6 +31,10 @@ struct ItemDetails: View {
           }
         }
       }
+      if let service = model.contextService {
+        ItemContextView(service: service, itemID: item.id).id(
+          service.url.absoluteString + "|" + item.id)
+      }
       if let completion = item.completion(in: events) {
         RelayPanel(spacing: 6) {
           PanelTitle("完成结果")

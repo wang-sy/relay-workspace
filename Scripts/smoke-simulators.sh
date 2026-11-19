@@ -10,6 +10,7 @@ launch_and_wait() {
     local device="$1" family="$2" before=0 route=workspace
     shift 2
     if [[ "${1:-}" == "--preview-hosted-functions" ]]; then route=functions; fi
+    if [[ "${1:-}" == "--preview-context" ]]; then route=context/recall; fi
     if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then before=$(successful_reads "$route"); fi
     xcrun simctl launch --terminate-running-process "$device" io.github.wang-sy.RelayWorkspace "$@"
     if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then
@@ -51,5 +52,7 @@ while read -r device family; do
     xcrun simctl io "$device" screenshot "$out/$family-workspace.png"
     launch_and_wait "$device" "$family" --preview-hosted-functions
     xcrun simctl io "$device" screenshot "$out/$family-functions.png"
+    launch_and_wait "$device" "$family" --preview-context
+    xcrun simctl io "$device" screenshot "$out/$family-context.png"
     xcrun simctl shutdown "$device"
 done <<< "$devices"

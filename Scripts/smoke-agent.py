@@ -65,7 +65,7 @@ def exercise(cmd, env):
     assert len(responses) == 4 and responses[0]["protocolVersion"] == "2025-11-25"
     expected = {"relay_read", "relay_apply"}
     if "--server" in cmd:
-        expected.add("relay_functions")
+        expected.update(["relay_functions","relay_recall","relay_attach"])
     assert {t["name"] for t in responses[1]["tools"]} == expected
     assert json.loads(responses[2]["content"][0]["text"])["actor"] == "test-member"
     state = json.loads(responses[3]["content"][0]["text"])

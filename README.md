@@ -133,6 +133,33 @@ relay --workspace "$demo" types
 
 Agent 将函数部署到服务时，可用 `{"kind":"实验复核"}` 订阅示例中的事件。函数通过 `ctx.item.fields.sampleSize` 获取当前样本量，通过 `ctx.event.change.payload.passRate` 获取这次复验的通过率。文件工作空间可保存这些约定，执行托管函数需要 Relay 服务。
 
+## 找回一件事
+
+打开需求或探索的「事项回顾」，可以看到上次决定、当时依据和下一步。每条结论都能点回带日期的资料或工作记录；缺少依据的行显示「待确认」。工具栏的放大镜可以按记得的词、标题或团队笔记找回事项。「资料」列出全部引用，「时间线」合并工作记录和材料，也能从某个事件进入它的依据。Mac、iPhone 和 iPad 连接同一个团队服务即可查看。文件夹工作空间沿用本地工作日志。
+
+Agent 可以问“地库断网那件事，最后为什么这样决定？”，调用 `relay_recall` 的 `search`、`recall`、`get`，沿返回的 `referenceID` 和 `eventID` 核对。`recall` 返回当前结论和来源，`since` 按 ISO 时间筛选此后发生的变化（含起始秒），`list` 和 `history` 用返回的 `next` 作为下一页 `before`。搜索范围包括事项、事件、引用说明和团队笔记。搜索至多返回 20 个候选，时间线和资料每页 24 条。
+
+```sh
+relay context search 地库 断网 巡检
+relay context recall IDEA-01 --since 2026-11-01T00:00:00Z
+relay context list IDEA-01
+relay context get 32200c26-1fbe-4b52-b776-0532479a1101
+```
+
+通过 `relay_attach` 或 `relay context attach` 提交一条引用。`requestID` 使用 UUID，重试沿用原值。`itemID` 指向事项，可选的 `eventID` 指向该事项的一次工作记录。`purpose` 是团队自定义的用途，`note` 是团队可见的判断。若要在第一屏展示，指定 `slot` 为 `decision`、`evidence` 或 `next`。
+
+| 材料 | 挂载和查看方式 |
+| --- | --- |
+| 描述或笔记 | 传 `material.kind=note`、标题和 `body`。正文可以搜索和阅读。 |
+| 飞书或其他 HTTPS 文档 | 传 `material.kind=link`、标题和原链接。段落锚点会保留，`locator` 可填写“第 3 段”等定位。 |
+| 图片和附件 | CLI 的 `--file PATH` 自动识别文件名和类型。MCP 可传 `material.data` 的 Base64，或为本机 MCP 配置 `RELAY_ATTACHMENT_ROOT` 后传该目录内的相对 `filePath`。每个文件最大 12 MiB。客户端支持预览、保存或分享。`relay context download 引用ID 输出路径` 会校验文件哈希。 |
+
+同一份材料可以挂到多个事项或事件。首次登记得到 `materialID`，在其他事项引用时可只传该 ID 和所需 `revision`，另写用途、说明和定位。发布新版传 `materialID`、`expectedRevision` 和新 `material`。原引用保留原版，也能从资料详情打开最新版。探索升级为需求后沿用原事项 ID 和资料。材料、文件内容与引用在同一 SQLite 事务内提交，团队数据库备份包含附件。
+
+Mac Agent 可用 `relay context source 引用ID [--keyword 关键词]` 或 `relay_recall` 的 `source`，通过本机已登录的 `lark-cli docs +fetch --as user` 打开飞书原文。带锚点时读取对应片段，没有定位时先返回目录。挂载时使用 `--pin-source` 或 MCP 的 `pinSource: true` 可锁定飞书版本，也可显式填写数字 `material.sourceVersion`。Relay 保存链接、定位、版本及明确写给团队的说明。受限正文每次由飞书鉴权，读取结果仅返回本次本地调用。移动端点「打开原文」进入飞书，普通原文链接展示当前可见版本。
+
+将 `Examples/context.jsonl` 逐行传给 `relay context attach`，即可在已导入事项 `IDEA-01` 的示例服务中复现一组有来源的决定、现场观察和下一步。
+
 ## 服务端托管函数
 
 可以让 Agent 设置「事项暂停三天后，如果还在等人，就提醒负责人」。Agent 用 `relay_functions` 发布 JavaScript，Relay 服务负责计时、读取当时的事项并执行。发布者退出 Codex、关闭客户端或让自己的电脑休眠后，常驻服务器仍会工作。Mac、iPhone 和 iPad 的成员菜单都有「服务端自动化」，可查看谁发布了函数、何时运行、写了几条记录，以及当前启停状态。暂停和恢复交给 Agent。

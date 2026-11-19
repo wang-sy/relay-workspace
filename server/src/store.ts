@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isDeepStrictEqual } from "node:util";
 import { ApiError, behavior, project, type Entry, type Item, type Write } from "./domain.js";
+import { ItemContexts } from "./context-store.js";
 import { HostedFunctions } from "./functions.js";
 import { iso, nextDue } from "./function-contract.js";
 import { baseKinds, builtInTriggers, operations, type TypeRecord } from "./vocabulary.js";
@@ -11,6 +12,7 @@ import { baseKinds, builtInTriggers, operations, type TypeRecord } from "./vocab
 export class JournalStore {
   private readonly db: DatabaseSync;
   readonly functions: HostedFunctions;
+  readonly contexts: ItemContexts;
 
   constructor(path: string) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -21,6 +23,8 @@ export class JournalStore {
       "CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, value TEXT NOT NULL);" +
       "CREATE TABLE IF NOT EXISTS type_definitions (family TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL, PRIMARY KEY(family,id))"
     );
+    this.contexts = new ItemContexts(this.db, { item:id=>this.item(id), event:id=>this.event(id),
+      transaction:(write,body)=>this.transaction(write,body) });
     this.functions = new HostedFunctions(this.db, {
       transaction: body => this.transaction(true, body), item: id => this.item(id), event: id => this.event(id),
       definition: id => this.definition("trigger", id),
