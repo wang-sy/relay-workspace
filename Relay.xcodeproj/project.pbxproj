@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		0C78A5D53E9E1DEA15542771 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F025A9C363E120137A7E424 /* main.swift */; };
-		17DB29E2D1802F4F9287884C /* Editor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF9EAE89967AE28367C695C /* Editor.swift */; };
 		1F635A86151BC49324CFFE44 /* relay in Embed macOS agent CLI */ = {isa = PBXBuildFile; fileRef = 2485AF70E8804E2B387F633D /* relay */; platformFilter = macos; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		88937F69F47B48EB893F3313 /* ItemDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */; };
 		F95AE34ECD16618E6CBB3FD1 /* RequirementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDB350688653D25D92F134F /* RequirementCards.swift */; };
@@ -57,7 +56,6 @@
 		2CA20CACDC9D3F7E4A983DE6 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
 		2F025A9C363E120137A7E424 /* main.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		3AD804C6A536121D7C2690AA /* MCP.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MCP.swift; sourceTree = "<group>"; };
-		4FF9EAE89967AE28367C695C /* Editor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Editor.swift; sourceTree = "<group>"; };
 		71357F4C8F183087B9274828 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9738020AE98E0D4FBE44853A /* Relay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Relay.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ItemDetails.swift; sourceTree = "<group>"; };
@@ -122,7 +120,6 @@
 		A29AE12A441E66799C406778 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				4FF9EAE89967AE28367C695C /* Editor.swift */,
 				240C9D7DCDC0BE1D93501072 /* RelayApp.swift */,
 				DF913EB576F80EC27F5A204E /* WorkspaceModel.swift */,
 				30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */,
@@ -260,7 +257,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				17DB29E2D1802F4F9287884C /* Editor.swift in Sources */,
 				8AAC00251AC0F8F3EE75EA70 /* RelayApp.swift in Sources */,
 				A2428E26DDF87F25AD7468E5 /* WorkspaceModel.swift in Sources */,
 				88937F69F47B48EB893F3313 /* ItemDetails.swift in Sources */,

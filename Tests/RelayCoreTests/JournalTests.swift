@@ -3,6 +3,20 @@ import XCTest
 @testable import RelayCore
 
 final class JournalTests: XCTestCase {
+  func testReadingAnEmptyFolderLeavesItUntouchedAndReportsInvalidStorage() throws {
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? fm.removeItem(at: root) }
+    let journal = Journal(root)
+    XCTAssertTrue(try journal.read().entries.isEmpty)
+    XCTAssertFalse(fm.fileExists(atPath: root.path))
+    try fm.createDirectory(at: root, withIntermediateDirectories: false)
+    XCTAssertTrue(try journal.read().entries.isEmpty)
+    XCTAssertEqual(try fm.contentsOfDirectory(atPath: root.path), [])
+    try Data().write(to: root.appendingPathComponent("RelayEvents"))
+    XCTAssertThrowsError(try journal.read())
+  }
+
   func testPauseIsIndependentOfFreeTextAndRecipient() throws {
     let now = Date()
     var state = Workspace()

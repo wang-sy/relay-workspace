@@ -5,6 +5,7 @@ public struct JournalUpdate: Sendable {
   public let workspace: Workspace?
   public let viewer: String?
   public let etag: String?
+  public var usesViewerToken = false
 }
 
 public enum WorkspaceJournal: Sendable {
@@ -100,6 +101,32 @@ public struct RemoteJournal: Sendable {
     return request
   }
 
+  private func agentRequest(_ path: String) throws -> URLRequest {
+    var req = request(path)
+    req.setValue("agent", forHTTPHeaderField: "X-Relay-Client")
+    // endpoint() allows plain HTTP only for loopback. Never send a local key to a remote service.
+    if token == nil, url.scheme == "http", url.path.isEmpty || url.path == "/" {
+      let override = ProcessInfo.processInfo.environment["RELAY_LOCAL_AGENT_DIR"]
+      let directory: URL
+      if let override, !override.isEmpty {
+        directory = URL(fileURLWithPath: override, isDirectory: true)
+      } else {
+        directory = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(
+          ".relay/local-agents", isDirectory: true)
+      }
+      let file = directory.appendingPathComponent("\(url.port ?? 80).token")
+      do {
+        let localToken = try String(contentsOf: file, encoding: .utf8)
+        req.setValue("Bearer " + localToken, forHTTPHeaderField: "Authorization")
+      } catch let error as CocoaError
+        where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code)
+      {
+        // Older services have no local credential. New services enforce authentication on receipt.
+      }
+    }
+    return req
+  }
+
   private func send(_ request: URLRequest, accepting codes: [Int]) async throws -> (
     Data, HTTPURLResponse
   ) {
@@ -123,7 +150,9 @@ public struct RemoteJournal: Sendable {
       return JournalUpdate(workspace: nil, viewer: nil, etag: etag ?? tag)
     }
     let result = try Wire.decoder().decode(Snapshot.self, from: data)
-    return JournalUpdate(workspace: result.workspace, viewer: result.viewer, etag: etag)
+    return JournalUpdate(
+      workspace: result.workspace, viewer: result.viewer, etag: etag,
+      usesViewerToken: response.value(forHTTPHeaderField: "X-Relay-Access") == "viewer")
   }
 
   public func append(
@@ -131,7 +160,7 @@ public struct RemoteJournal: Sendable {
   )
     async throws -> Entry
   {
-    var req = request("events")
+    var req = try agentRequest("events")
     req.httpMethod = "POST"
     req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     req.httpBody = try Wire.encoder().encode(
@@ -150,7 +179,8 @@ public struct RemoteJournal: Sendable {
   {
     guard id.range(of: #"^[a-z0-9][a-z0-9_-]{0,63}\z"#, options: .regularExpression) != nil
     else { throw RelayError("函数 ID 可使用小写字母、数字、连字符和下划线") }
-    var req = request("functions/" + id)
+    let path = "functions/" + id
+    var req = try body == nil ? request(path) : agentRequest(path)
     req.httpMethod = method
     if let body {
       req.httpBody = body

@@ -9,6 +9,7 @@ import selectors
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import uuid
 
@@ -21,10 +22,11 @@ server_entry = Path(__file__).resolve().parents[1] / "server/dist/index.js"
 
 
 @contextlib.contextmanager
-def backend(root):
+def backend(root, local=False):
     token = str(uuid.uuid4())
     server_env = dict(os.environ, RELAY_HOST="127.0.0.1", RELAY_PORT="0", RELAY_DB=str(root / "journal.db"),
-                      RELAY_MEMBERS_JSON=json.dumps({"test-member": token}))
+                      RELAY_MEMBERS_JSON="" if local else json.dumps({"test-member": token}),
+                      RELAY_LOCAL_AGENT_DIR=str(root / "agent-keys"))
     with subprocess.Popen(["node", str(server_entry)], env=server_env, stdout=subprocess.PIPE, text=True) as service:
         try:
             with selectors.DefaultSelector() as ready:
@@ -188,6 +190,21 @@ with tempfile.TemporaryDirectory() as folder:
             exercise_board([binary, "--server", address], env)
             exercise_functions([binary, "--server", address], env)
             exercise_types([binary, "--server", address], env)
+        with tempfile.TemporaryDirectory() as local_dir:
+            root = Path(local_dir)
+            with backend(root, local=True) as (address, _):
+                env = dict(os.environ, RELAY_ACTOR="test-member", RELAY_LOCAL_AGENT_DIR=str(root / "agent-keys"))
+                env.pop("RELAY_TOKEN", None)
+                key = next((root / "agent-keys").glob("*.token"))
+                assert key.stat().st_mode & 0o077 == 0
+                req = urllib.request.Request(address + "/v1/events", data=b"{}", headers={
+                    "X-Relay-Client": "agent", "Content-Type": "application/json"})
+                try:
+                    urllib.request.urlopen(req, timeout=5)
+                    raise AssertionError("anonymous local writer accepted")
+                except urllib.error.HTTPError as error:
+                    assert error.code == 403
+                exercise([binary, "--server", address], env)
         print("Swift CLI and MCP share custom types, event payloads, attributed writes and hosted functions.")
     else:
         cmd = [binary, "--workspace", folder]

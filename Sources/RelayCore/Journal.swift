@@ -11,8 +11,9 @@ public struct Journal: Sendable {
         .appendingPathComponent("Relay Workspace/Local", isDirectory: true))
   }
   private func coordinate<T>(write: Bool, _ body: @escaping (URL) throws -> T) throws -> T {
-    let fm = FileManager.default
-    try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+    if write {
+      try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    }
     let coordinator = NSFileCoordinator()
     var coordinationError: NSError?
     var result: Result<T, Error>?
@@ -71,7 +72,17 @@ public struct Journal: Sendable {
     return (workspace, sorted.last?.sequence ?? 0)
   }
 
-  public func read() throws -> Workspace { try coordinate(write: false) { try load(at: $0).0 } }
+  public func read() throws -> Workspace {
+    do {
+      let values = try folder.resourceValues(forKeys: [.isDirectoryKey])
+      guard values.isDirectory == true else { throw RelayError("RelayEvents 必须是文件夹") }
+    } catch let error as CocoaError
+      where [.fileNoSuchFile, .fileReadNoSuchFile].contains(error.code)
+    {
+      return Workspace()
+    }
+    return try coordinate(write: false) { try load(at: $0).0 }
+  }
 
   public func installExampleIfEmpty() throws {
     try coordinate(write: true) { dir in

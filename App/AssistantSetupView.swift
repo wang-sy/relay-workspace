@@ -49,8 +49,12 @@
               .font(.callout)
           }
         } else {
-          Text("Relay 会将当前看板添加到这台 Mac 的 \(client.rawValue)。之后可以在对话里查看需求、记录进展。")
-            .font(.callout).foregroundStyle(.secondary)
+          Text(
+            model.usesViewerToken
+              ? "当前连接使用查看令牌。若要记录进展，请给助手进程设置 RELAY_TOKEN，值为团队分配给你的 Agent 令牌。"
+              : "Relay 会将当前看板添加到这台 Mac 的 \(client.rawValue)。之后可以在对话里查看需求、记录进展。"
+          )
+          .font(.callout).foregroundStyle(.secondary)
           if let error {
             Label(error, systemImage: "exclamationmark.circle").font(.callout).foregroundStyle(
               RelayPalette.amber)

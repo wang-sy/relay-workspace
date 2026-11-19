@@ -24,7 +24,7 @@ test("HTTP accepts one write on retry, binds the author and preserves it across 
   });
   const base = "http://127.0.0.1:" + server.address().port + "/v1/";
   const headers = { Authorization: "Bearer " + token, "Content-Type": "application/json" };
-  const post = body => fetch(base + "events", { method: "POST", headers, body: JSON.stringify(body) });
+  const post = body => fetch(base + "events", { method: "POST", headers: { ...headers, "X-Relay-Client": "agent" }, body: JSON.stringify(body) });
   assert.equal((await fetch(base + "workspace")).status, 401);
   const empty = await fetch(base + "workspace", { headers });
   const emptyTag = empty.headers.get("etag");
@@ -46,6 +46,46 @@ test("HTTP accepts one write on retry, binds the author and preserves it across 
     assert.equal(reopened.snapshot("River").body.workspace.items.idea.title, "One");
     assert.equal(reopened.snapshot("River").body.workspace.entries.length, 1);
   } finally { reopened.close(); }
+});
+
+test("board credentials can read, only an agent credential and transport can change team state", async t => {
+  const agent = randomUUID(), viewer = randomUUID();
+  assert.throws(() => memberKeys(JSON.stringify({ River: { viewer: agent, agent } })), /distinct/);
+  const keys = memberKeys(JSON.stringify({ River: { viewer, agent } }));
+  const store = new JournalStore(":memory:");
+  const server = relayServer(store, "127.0.0.1", keys);
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); store.close(); });
+  const base = "http://127.0.0.1:" + server.address().port + "/v1/";
+  const headers = token => ({ Authorization: "Bearer " + token, "Content-Type": "application/json" });
+  const client = { "X-Relay-Client": "agent" };
+  const event = { ...write({ operation: "create", kind: "idea", itemID: "sample", title: "访谈" }), source: "Codex" };
+  const definition = { name: "查看", trigger: { kind: "at", at: "2030-01-01T00:00:00Z" },
+    code: "return [];", actor: "spoof", expectedRevision: 0 };
+  const mutations = [
+    ["events", "POST", event], ["functions/review", "PUT", definition],
+    ["functions/review", "PATCH", { enabled: false, actor: "spoof", expectedRevision: 1 }],
+  ];
+  for (const [path, method, body] of mutations) {
+    for (const credentials of [headers(agent), { ...headers(viewer), ...client }, headers(viewer)]) {
+      assert.equal((await fetch(base + path, { method, headers: credentials, body: JSON.stringify(body) })).status, 403);
+    }
+  }
+  const get = path => fetch(base + path, { headers: headers(viewer) });
+  const board = await get("workspace");
+  assert.equal(board.headers.get("X-Relay-Access"), "viewer");
+  assert.deepEqual((await board.json()).workspace.entries, []);
+  assert.deepEqual(await (await get("functions")).json(), []);
+  for (const [path, method, body] of mutations) {
+    const result = await fetch(base + path, { method, headers: { ...headers(agent), ...client }, body: JSON.stringify(body) });
+    assert.equal(result.status, method === "POST" ? 201 : 200, await result.text());
+  }
+  const snapshot = await (await get("workspace")).json();
+  assert.equal(snapshot.viewer, "River");
+  assert.equal(snapshot.workspace.entries[0].actor, "River");
+  const fn = await (await get("functions/review")).json();
+  assert.equal(fn.enabled, false);
+  assert.equal(fn.revision, 2);
 });
 
 test("scheduling, roles and handoff references use the same item and pause", () => {

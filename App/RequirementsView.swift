@@ -78,7 +78,8 @@ struct RequirementsView: View {
       scope != nil
         ? "没有与你相关的\(layout == .tree ? "事项" : "需求")"
         : (layout == .tree ? "还没有方向与需求" : "还没有需求"),
-      systemImage: layout == .gantt ? "calendar" : "flag")
+      systemImage: layout == .gantt ? "calendar" : "flag",
+      description: scope == nil ? Text("可以让助手创建方向和需求。") : nil)
   }
 
   private struct TreeRow: Identifiable {

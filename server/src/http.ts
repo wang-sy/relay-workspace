@@ -9,24 +9,40 @@ import { validateCode } from "./function-runtime.js";
 const loopbacks = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 
-export function memberKeys(json?: string): Map<string, string> {
+type MemberAccess = { actor: string; scope: "viewer" | "agent" };
+type MemberKeys = Map<string, MemberAccess>;
+
+export function memberKeys(json?: string): MemberKeys {
   if (!json) return new Map();
   let config: unknown;
   try { config = JSON.parse(json); } catch { throw new Error("Invalid RELAY_MEMBERS_JSON"); }
-  const parsed = z.record(z.string().trim().min(1), z.string().min(24)).safeParse(config);
+  const token = z.string().min(24).regex(/^\S+$/);
+  const credentials = z.union([token, z.object({ viewer: token, agent: token }).strict()]);
+  const parsed = z.record(z.string().trim().min(1), credentials).safeParse(config);
   if (!parsed.success || !Object.keys(parsed.data).length) throw new Error("Invalid RELAY_MEMBERS_JSON");
-  const keys = new Map<string, string>();
-  for (const [actor, token] of Object.entries(parsed.data)) {
+  const keys: MemberKeys = new Map();
+  function register(token: string, access: MemberAccess) {
     const fingerprint = hash(token);
-    if (keys.has(fingerprint)) throw new Error("Each member needs a distinct token");
-    keys.set(fingerprint, actor);
+    if (keys.has(fingerprint)) throw new Error("Each credential needs a distinct token");
+    keys.set(fingerprint, access);
+  }
+  for (const [actor, value] of Object.entries(parsed.data)) {
+    if (typeof value === "string") register(value, { actor, scope: "agent" });
+    else {
+      register(value.viewer, { actor, scope: "viewer" });
+      register(value.agent, { actor, scope: "agent" });
+    }
   }
   return keys;
 }
 
-function authorize(request: IncomingMessage, keys: Map<string, string>): string | null {
+function bearer(request: IncomingMessage): string | undefined {
+  return /^Bearer ([^\s]+)$/i.exec(request.headers.authorization ?? "")?.[1];
+}
+
+function authorize(request: IncomingMessage, keys: MemberKeys): MemberAccess | null {
   if (keys.size) {
-    const token = /^Bearer ([^\s]+)$/i.exec(request.headers.authorization ?? "")?.[1];
+    const token = bearer(request);
     const member = token && keys.get(hash(token));
     if (!member) throw new ApiError(401, "A valid Relay member token is required");
     return member;
@@ -63,13 +79,22 @@ function json(response: ServerResponse, status: number, body: unknown) {
   response.end(JSON.stringify(body));
 }
 
-export function relayServer(store: JournalStore, host: string, keys: Map<string, string>) {
+export function relayServer(store: JournalStore, host: string, keys: MemberKeys, localAgentToken?: string) {
+  const localAgentKey = localAgentToken && hash(localAgentToken);
   if (!keys.size && !loopbacks.has(host)) throw new Error("Configure member tokens before listening outside loopback");
   return createServer({ requestTimeout: 15000, headersTimeout: 10000 }, async (request, response) => {
     try {
       const path = request.url?.split("?")[0];
       if (path === "/healthz" && request.method === "GET") return json(response, 200, { status: "ok" });
-      const viewer = authorize(request, keys);
+      const access = authorize(request, keys);
+      const viewer = access?.actor ?? null;
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        if (access?.scope === "viewer") throw new ApiError(403, "此令牌仅供查看。请为助手配置 Agent 令牌。");
+        if (request.headers["x-relay-client"] !== "agent") throw new ApiError(403, "请通过新版 Relay CLI 或 MCP 更新看板。");
+        if (!access && (!localAgentKey || hash(bearer(request) ?? "") !== localAgentKey)) {
+          throw new ApiError(403, "缺少本机 Agent 凭据。请在运行服务的账户下使用 Relay CLI 或 MCP。");
+        }
+      }
       if (path === "/v1/functions" && request.method === "GET") return json(response, 200, store.functions.list());
       const match = /^\/v1\/functions\/([^/]+)$/.exec(path ?? "");
       if (match) {
@@ -91,6 +116,7 @@ export function relayServer(store: JournalStore, host: string, keys: Map<string,
       }
       if (path === "/v1/workspace" && request.method === "GET") {
         const snapshot = store.snapshot(viewer, request.headers["if-none-match"], request.headers["x-relay-types"] === "open");
+        if (access) response.setHeader("X-Relay-Access", access.scope);
         response.setHeader("Vary", "X-Relay-Types, Authorization");
         response.setHeader("ETag", snapshot.etag);
         if (!snapshot.body) {

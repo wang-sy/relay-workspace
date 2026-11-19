@@ -109,23 +109,6 @@ struct ItemLink: View {
   }
 }
 
-struct EditTarget: Identifiable {
-  let id = UUID()
-  var item: Item?
-  var operation: WorkOperation
-  var kind: ItemKind
-  var reference: UUID?
-  init(
-    _ item: Item? = nil, _ op: WorkOperation = .create, _ kind: ItemKind = .direction,
-    reference: UUID? = nil
-  ) {
-    self.item = item
-    operation = op
-    self.kind = kind
-    self.reference = reference
-  }
-}
-
 struct WorkspaceView: View {
   @EnvironmentObject private var model: WorkspaceModel
   @Environment(\.scenePhase) private var phase
@@ -141,7 +124,6 @@ struct WorkspaceView: View {
   @State private var directionPath: [String] = []
   @State private var ideaPath: [String] = []
   @State private var onlyMine = false
-  @State private var edit: EditTarget?
   @State private var tool: WorkspaceTool? = {
     #if os(iOS) && targetEnvironment(simulator) && DEBUG
       if ProcessInfo.processInfo.arguments.contains("--preview-hosted-functions") {
@@ -171,7 +153,6 @@ struct WorkspaceView: View {
       #endif
     }
     .tint(RelayPalette.accent)
-    .sheet(item: $edit) { Editor(target: $0).environmentObject(model) }
     .sheet(item: $tool) { utility in
       NavigationStack {
         Group {
@@ -185,7 +166,7 @@ struct WorkspaceView: View {
           case .reminders: reminders
           case .functions:
             if let service = model.hostedService {
-              HostedFunctionsView(service: service, actor: model.currentActor).id(service.url)
+              HostedFunctionsView(service: service).id(service.url)
             } else {
               ContentUnavailableView("请先连接团队服务", systemImage: "server.rack")
             }
@@ -217,14 +198,6 @@ struct WorkspaceView: View {
         try? await Task.sleep(for: .seconds(5))
       } while !Task.isCancelled
     }
-    .alert(
-      "工作空间提示",
-      isPresented: Binding(get: { model.problem != nil }, set: { if !$0 { model.problem = nil } })
-    ) {
-      Button("知道了") { model.problem = nil }
-    } message: {
-      Text(model.problem ?? "")
-    }
   }
 
   private var splitView: some View {
@@ -245,7 +218,7 @@ struct WorkspaceView: View {
         #endif
         .navigationDestination(for: String.self) { id in
           if let item = model.state.items[id] {
-            ItemDetails(item: item, edit: { edit = $0 })
+            ItemDetails(item: item)
           } else {
             ContentUnavailableView("暂无事项", systemImage: "questionmark.folder")
           }
@@ -264,7 +237,7 @@ struct WorkspaceView: View {
               }
             #endif
             if model.hasSnapshot {
-              ToolbarItemGroup(placement: .primaryAction) {
+              ToolbarItem(placement: .primaryAction) {
                 Menu {
                   Picker("显示范围", selection: $onlyMine) {
                     Text("全部事项").tag(false)
@@ -278,11 +251,6 @@ struct WorkspaceView: View {
                       : "line.3.horizontal.decrease.circle")
                 }
                 .help(onlyMine ? "正在显示与我有关的事项" : "筛选与我有关的事项")
-                Button {
-                  edit = EditTarget(nil, .create, page == .ideas ? .idea : .direction)
-                } label: {
-                  Label(page == .ideas ? "新建探索" : "新建事项", systemImage: "plus")
-                }.help(page == .ideas ? "新建探索" : "新建事项")
               }
             }
           }
@@ -414,7 +382,9 @@ struct WorkspaceView: View {
     let categories = Set(grouped.keys).union(scope == nil ? declared : []).sorted()
     return RelayPage { _ in
       if categories.isEmpty {
-        ContentUnavailableView(scope == nil ? "还没有探索" : "没有与你相关的探索", systemImage: "lightbulb")
+        ContentUnavailableView(
+          scope == nil ? "还没有探索" : "没有与你相关的探索", systemImage: "lightbulb",
+          description: scope == nil ? Text("可以让助手添加第一条探索，或先建一个分类。") : nil)
       }
       ForEach(categories, id: \.self) { category in
         RelayPanel(spacing: 4) {
@@ -456,7 +426,7 @@ struct WorkspaceView: View {
       RelayPanel(spacing: 7) {
         PanelTitle("团队的回看约定")
         if reminders.isEmpty {
-          QuietMessage(symbol: "bell", text: "还没有回看约定。可以在事项详情约定时间，也可以让 Agent 添加。")
+          QuietMessage(symbol: "bell", text: "还没有回看约定。可以让助手设置提醒。")
         }
         ForEach(reminders) { entry in
           if let item = model.state.items[entry.change.itemID] {

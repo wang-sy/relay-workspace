@@ -26,8 +26,7 @@ extension HostedFunction.Trigger {
 }
 
 struct HostedFunctionsView: View {
-  let service: RemoteJournal
-  let actor: String
+  let service: any HostedFunctionReading
   @State private var functions: [HostedFunction]?
   @State private var problem: String?
 
@@ -53,7 +52,7 @@ struct HostedFunctionsView: View {
             ForEach(functions) { function in
               if function.id != functions.first?.id { Hairline() }
               NavigationLink {
-                HostedFunctionDetail(service: service, actor: actor, initial: function)
+                HostedFunctionDetail(service: service, initial: function)
               } label: {
                 HStack(spacing: 12) {
                   SymbolTile(
@@ -104,12 +103,10 @@ struct HostedFunctionsView: View {
 }
 
 private struct HostedFunctionDetail: View {
-  let service: RemoteJournal
-  let actor: String
+  let service: any HostedFunctionReading
   let initial: HostedFunction
   @State private var detail: HostedFunction?
   @State private var problem: String?
-  @State private var saving = false
   @State private var showCode = false
 
   var body: some View {
@@ -125,17 +122,9 @@ private struct HostedFunctionDetail: View {
         if let next = function.nextAt { Text("下次执行 \(next.formatted())") }
         Text("发布人 \(function.actor) · 版本 \(function.revision)").font(.subheadline).foregroundStyle(
           RelayPalette.secondary)
-        Button(function.enabled ? "暂停自动化" : "启用自动化") {
-          saving = true
-          Task {
-            defer { saving = false }
-            do {
-              detail = try await service.setFunctionEnabled(
-                function.id, revision: function.revision, enabled: !function.enabled, actor: actor)
-              problem = nil
-            } catch { problem = error.localizedDescription }
-          }
-        }.disabled(saving || detail == nil)
+        StatusLabel(
+          text: function.enabled ? "已启用" : "已暂停",
+          tone: function.enabled ? RelayPalette.teal : RelayPalette.muted)
       }
       if let problem {
         Label(problem, systemImage: "exclamationmark.circle").foregroundStyle(RelayPalette.amber)
@@ -177,7 +166,7 @@ private struct HostedFunctionDetail: View {
           let updated = try await service.function(initial.id)
           if !Task.isCancelled && updated.revision >= (detail?.revision ?? 0) {
             detail = updated
-            if !saving { problem = nil }
+            problem = nil
           }
         } catch { if !Task.isCancelled { problem = error.localizedDescription } }
         try? await Task.sleep(for: .seconds(5))

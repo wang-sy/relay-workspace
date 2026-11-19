@@ -5,7 +5,6 @@ struct ItemDetails: View {
   @EnvironmentObject private var model: WorkspaceModel
   @Environment(\.dynamicTypeSize) private var typeSize
   let item: Item
-  let edit: (EditTarget) -> Void
 
   var body: some View {
     let state = model.state
@@ -58,24 +57,13 @@ struct ItemDetails: View {
                     entry.change.operation == .pause ? "卡住" : "等接手", who.map { "等" + $0 },
                     entry.change.note,
                   ].compactMap { $0 }.joined(separator: " · "))
-                gapAction(entry, on: source)
               }
             }
           }
           ForEach(gaps) { gap in
             if !pending.isEmpty || gap.id != gaps.first?.id { Hairline() }
             let entry = events.first { $0.id == gap.id }
-            ViewThatFits(in: .horizontal) {
-              HStack(spacing: 12) {
-                gapNote(gap, entry: entry)
-                Spacer(minLength: 12)
-                gapAction(entry, on: item)
-              }
-              VStack(alignment: .leading, spacing: 10) {
-                gapNote(gap, entry: entry)
-                gapAction(entry, on: item)
-              }
-            }
+            gapNote(gap, entry: entry)
           }
         }
       }
@@ -90,21 +78,6 @@ struct ItemDetails: View {
       }
     }
     .navigationTitle(state.label(.item, item.kind.rawValue) + "详情")
-    .toolbar {
-      Menu {
-        Button("披露进展") { edit(EditTarget(item, .update)) }
-        Button("约定回看") { edit(EditTarget(item, .remind)) }
-        if item.behavior == .idea { Button("纳入需求排期") { edit(EditTarget(item, .promote)) } }
-        if item.behavior == .direction {
-          Button("新增需求") { edit(EditTarget(item, .create, .requirement)) }
-        }
-        if item.behavior == .requirement {
-          Button("拆出任务") { edit(EditTarget(item, .create, .task)) }
-        }
-      } label: {
-        Label("事项操作", systemImage: "ellipsis.circle")
-      }
-    }
   }
 
   private func gapNote(_ gap: Gap, entry: Entry?) -> some View {
@@ -122,20 +95,6 @@ struct ItemDetails: View {
         }
       }
     }.fixedSize(horizontal: false, vertical: true)
-  }
-
-  private func gapAction(_ entry: Entry?, on source: Item) -> some View {
-    let op: WorkOperation
-    switch entry?.change.operation {
-    case .handoff: op = .acknowledge
-    case .milestone: op = .result
-    case .pause: op = .remind
-    default: op = .update
-    }
-    return Button(op.label) {
-      edit(
-        EditTarget(source, op, reference: [.result, .acknowledge].contains(op) ? entry?.id : nil))
-    }.buttonStyle(.bordered).fixedSize()
   }
 
   private var facts: some View {

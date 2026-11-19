@@ -24,6 +24,19 @@ enum DeviceNotificationStatus: Equatable {
   }
 }
 
+protocol WorkspaceReading: Sendable {
+  func read(ifNoneMatch etag: String?) async throws -> JournalUpdate
+}
+
+protocol HostedFunctionReading: WorkspaceReading {
+  var url: URL { get }
+  func functions() async throws -> [HostedFunction]
+  func function(_ id: String) async throws -> HostedFunction
+}
+
+extension WorkspaceJournal: WorkspaceReading {}
+extension RemoteJournal: HostedFunctionReading {}
+
 @MainActor
 final class WorkspaceModel: ObservableObject {
   @Published private(set) var state = Workspace()
@@ -32,7 +45,7 @@ final class WorkspaceModel: ObservableObject {
   @Published private(set) var sourceIssue: String?
   @Published private(set) var hasSnapshot = false
   @Published private(set) var viewer: String?
-  @Published var problem: String?
+  @Published private(set) var usesViewerToken = false
   @Published private(set) var notificationStatus = DeviceNotificationStatus.reading
   @Published private(set) var notificationRequestError: String?
   @Published var actor: String {
@@ -45,11 +58,8 @@ final class WorkspaceModel: ObservableObject {
   }
   var usesSavedToken: Bool { serverAddress.map(hasToken) ?? false }
   private let alerts = LocalAlerts()
-  private var journal: WorkspaceJournal?
-  var hostedService: RemoteJournal? {
-    if case .server(let service) = journal { return service }
-    return nil
-  }
+  private var journal: (any WorkspaceReading)?
+  var hostedService: (any HostedFunctionReading)? { journal as? any HostedFunctionReading }
   private var grant: URL?
   private var started = false
   private var generation = 0
@@ -84,7 +94,7 @@ final class WorkspaceModel: ObservableObject {
       do {
         let endpoint = try RemoteJournal.endpoint(serverAddress)
         let token = hasToken(endpoint.absoluteString) ? try ServerCredentials.read(endpoint) : nil
-        journal = .server(try RemoteJournal(address: serverAddress, token: token))
+        journal = try RemoteJournal(address: serverAddress, token: token)
       } catch { sourceIssue = error.localizedDescription }
       return
     }
@@ -104,7 +114,7 @@ final class WorkspaceModel: ObservableObject {
         sourceIssue = "请在工作空间设置中重新选择共享文件夹。\(error.localizedDescription)"
       }
     } else {
-      journal = .folder(.local)
+      journal = WorkspaceJournal.folder(.local)
     }
   }
 
@@ -116,12 +126,13 @@ final class WorkspaceModel: ObservableObject {
     await refresh()
   }
 
-  private func reset(to source: WorkspaceJournal) {
+  private func reset(to source: any WorkspaceReading) {
     generation += 1
     journal = source
     etag = nil
     sourceIssue = nil
     viewer = nil
+    usesViewerToken = false
     hasSnapshot = false
     state = Workspace()
   }
@@ -145,7 +156,7 @@ final class WorkspaceModel: ObservableObject {
     }
     grant?.stopAccessingSecurityScopedResource()
     grant = nil
-    reset(to: .server(remote))
+    reset(to: remote)
     serverAddress = url.absoluteString
     UserDefaults.standard.set(url.absoluteString, forKey: "relay.server")
     UserDefaults.standard.set("server", forKey: "relay.mode")
@@ -165,7 +176,9 @@ final class WorkspaceModel: ObservableObject {
       let defaults = UserDefaults.standard
       if let url {
         #if os(macOS)
-          let options: URL.BookmarkCreationOptions = [.withSecurityScope]
+          let options: URL.BookmarkCreationOptions = [
+            .withSecurityScope, .securityScopeAllowOnlyReadAccess,
+          ]
         #else
           let options: URL.BookmarkCreationOptions = [.minimalBookmark]
         #endif
@@ -193,6 +206,7 @@ final class WorkspaceModel: ObservableObject {
     if let snapshot = update.workspace {
       state = snapshot
       viewer = update.viewer
+      usesViewerToken = update.usesViewerToken
       hasSnapshot = true
     }
     etag = update.etag
@@ -231,12 +245,6 @@ final class WorkspaceModel: ObservableObject {
     }
   }
 
-  func submit(_ change: Change, id: UUID) async throws {
-    guard let journal else { throw RelayError("请先连接工作空间") }
-    let writer = currentActor.trimmingCharacters(in: .whitespacesAndNewlines)
-    _ = try await journal.append(change, id: id, actor: writer, source: "Relay App")
-    await refresh()
-  }
   func authorizeNotifications() async {
     notificationRequestError = nil
     do {

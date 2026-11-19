@@ -51,7 +51,7 @@ struct WorkspaceSettings: View {
       return isDeviceService(address)
         ? "通过这台设备上的 Relay 服务同步看板。" : "这份看板由团队服务同步。"
     }
-    return model.root == Journal.local.root ? "看板保存在此设备的应用目录中。" : "看板从所选文件夹读取并保存。"
+    return model.root == Journal.local.root ? "从此设备读取工作记录。" : "从所选文件夹读取工作记录。"
   }
 
   private var status: String {
@@ -121,7 +121,7 @@ struct WorkspaceSettings: View {
               MemberMark(name: model.currentActor, size: 30)
             }
             VStack(alignment: .leading, spacing: 3) {
-              Text("记录署名").font(.caption).foregroundStyle(RelayPalette.secondary)
+              Text("当前成员").font(.caption).foregroundStyle(RelayPalette.secondary)
               Text(pending ? "连接后显示" : (model.currentActor.isEmpty ? "尚未填写" : model.currentActor))
                 .font(.body.weight(.medium)).textSelection(.enabled)
             }
@@ -130,7 +130,7 @@ struct WorkspaceSettings: View {
               Text(model.sourceIssue == nil ? "由团队服务确认" : "上次连接时确认")
                 .font(.caption).foregroundStyle(RelayPalette.secondary)
             } else if !pending {
-              Button("修改署名…") { action = .signature }.buttonStyle(.borderless)
+              Button("更改名字…") { action = .signature }.buttonStyle(.borderless)
                 #if os(iOS)
                   .foregroundStyle(RelayPalette.accent)
                 #endif
@@ -153,11 +153,13 @@ struct WorkspaceSettings: View {
                 #if os(macOS)
                   Text(
                     assistants.isEmpty
-                      ? "让助手更新看板" : assistants.map(\.rawValue).joined(separator: "、") + " 已配置"
+                      ? "连接工作助手" : assistants.map(\.rawValue).joined(separator: "、") + " 已配置"
                   ).font(.headline)
                   Text(
-                    assistants.isEmpty
-                      ? "连接后，你可以在 Codex 或 Claude Code 的对话里记录进展。" : "在助手里新开一个对话，就可以查看需求或记录进展。"
+                    model.usesViewerToken
+                      ? "当前令牌只供查看。要记录进展，请为助手配置 Agent 令牌。"
+                      : (assistants.isEmpty
+                        ? "连接后，可以在 Codex 或 Claude Code 的对话里记录进展。" : "打开助手对话即可查看需求或记录进展。")
                   )
                   .font(.callout).foregroundStyle(RelayPalette.secondary)
                 #else
@@ -266,9 +268,9 @@ private struct SignatureEditor: View {
   }
   private var name: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
   var body: some View {
-    SettingsSheet(title: "修改记录署名") {
+    SettingsSheet(title: "本机成员名") {
       VStack(alignment: .leading, spacing: 7) {
-        Text("你在此设备上新写的记录会使用这个名字。").font(.callout).foregroundStyle(.secondary)
+        Text("这个名字用于筛选与你有关的事项和接收本机提醒。").font(.callout).foregroundStyle(.secondary)
         TextField("你的名字", text: $draft).textFieldStyle(.roundedBorder)
           .onSubmit { save() }
       }

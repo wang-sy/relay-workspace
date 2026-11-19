@@ -143,7 +143,7 @@ test("member authentication binds hosted code, supports versioned retries and re
   await new Promise(resolve => server.listen(0,"127.0.0.1",resolve));
   t.after(async () => { await new Promise(resolve => server.close(resolve)); store.close(); });
   const base = "http://127.0.0.1:"+server.address().port+"/v1/functions";
-  const put = body => fetch(base+"/review",{method:"PUT",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const put = body => fetch(base+"/review",{method:"PUT",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json","X-Relay-Client":"agent"},body:JSON.stringify(body)});
   const body = {...afterPause,actor:"spoof",expectedRevision:0};
   assert.equal((await fetch(base)).status,401);
   assert.equal((await put({...body,code:"return (",})).status,422);
