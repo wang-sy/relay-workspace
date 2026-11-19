@@ -3,6 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { z } from "zod";
 import { ApiError, writeSchema } from "./domain.js";
 import type { JournalStore } from "./store.js";
+import { deploymentSchema, functionID, switchSchema } from "./function-contract.js";
+import { validateCode } from "./function-runtime.js";
 
 const loopbacks = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -68,6 +70,25 @@ export function relayServer(store: JournalStore, host: string, keys: Map<string,
       const path = request.url?.split("?")[0];
       if (path === "/healthz" && request.method === "GET") return json(response, 200, { status: "ok" });
       const viewer = authorize(request, keys);
+      if (path === "/v1/functions" && request.method === "GET") return json(response, 200, store.functions.list());
+      const match = /^\/v1\/functions\/([^/]+)$/.exec(path ?? "");
+      if (match) {
+        const key = functionID.safeParse(match[1]);
+        if (!key.success) throw new ApiError(422, "Invalid function ID");
+        const id = key.data;
+        if (request.method === "GET") return json(response, 200, store.functions.get(id));
+        if (request.method === "PUT" || request.method === "PATCH") {
+          const body = await readBody(request);
+          const attributed = viewer && body && typeof body === "object" && !Array.isArray(body) ? { ...body, actor: viewer } : body;
+          if (request.method === "PATCH") {
+            const data = switchSchema.parse(attributed);
+            return json(response, 200, store.functions.setEnabled(id, data.expectedRevision, data.enabled, data.actor));
+          }
+          const { actor, expectedRevision, ...definition } = deploymentSchema.parse(attributed);
+          await validateCode(definition.code);
+          return json(response, 200, store.functions.deploy(id, expectedRevision, definition, actor));
+        }
+      }
       if (path === "/v1/workspace" && request.method === "GET") {
         const snapshot = store.snapshot(viewer, request.headers["if-none-match"]);
         response.setHeader("ETag", snapshot.etag);
@@ -90,6 +111,7 @@ export function relayServer(store: JournalStore, host: string, keys: Map<string,
       }
       throw new ApiError(404, "Route not found");
     } catch (error) {
+      if (error instanceof z.ZodError) return json(response, 422, { error: "Invalid function field: " + (error.issues[0]?.path.join(".") || "request") });
       if (error instanceof ApiError) return json(response, error.status, { error: error.message });
       console.error("Relay could not complete a storage operation.");
       return json(response, 500, { error: "Workspace storage is unavailable" });

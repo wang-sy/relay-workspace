@@ -60,6 +60,7 @@ private enum Page: String, CaseIterable, Identifiable {
 private enum WorkspaceTool: String, Identifiable {
   case settings = "工作空间"
   case reminders = "提醒"
+  case functions = "服务端自动化"
   var id: Self { self }
 }
 
@@ -118,6 +119,9 @@ struct WorkspaceView: View {
   @State private var edit: EditTarget?
   @State private var tool: WorkspaceTool? = {
     #if os(iOS) && targetEnvironment(simulator) && DEBUG
+      if ProcessInfo.processInfo.arguments.contains("--preview-hosted-functions") {
+        return .functions
+      }
       if ProcessInfo.processInfo.arguments.contains("--preview-workspace") { return .settings }
     #endif
     return nil
@@ -154,6 +158,12 @@ struct WorkspaceView: View {
               tool = nil
             }
           case .reminders: reminders
+          case .functions:
+            if let service = model.hostedService {
+              HostedFunctionsView(service: service, actor: model.currentActor).id(service.url)
+            } else {
+              ContentUnavailableView("请先连接团队服务", systemImage: "server.rack")
+            }
           }
         }
         .navigationTitle(utility.rawValue)
@@ -355,6 +365,13 @@ struct WorkspaceView: View {
       tool = .reminders
     } label: {
       Label("提醒…", systemImage: "bell")
+    }
+    if model.serverAddress != nil {
+      Button {
+        tool = .functions
+      } label: {
+        Label("服务端自动化…", systemImage: "clock.arrow.2.circlepath")
+      }
     }
   }
 

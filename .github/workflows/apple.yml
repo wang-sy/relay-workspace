@@ -52,6 +52,7 @@ jobs:
           service_pid=$!
           trap 'kill "$service_pid" 2>/dev/null || true' EXIT
           curl --fail --silent --retry 10 --retry-connrefused http://127.0.0.1:8731/healthz
+          "$(swift build --show-bin-path)/relay" functions deploy < Examples/pause-review.json > /dev/null
           Scripts/smoke-simulators.sh "$RUNNER_TEMP/relay-ios/Build/Products/Debug-iphonesimulator/Relay.app" "$RUNNER_TEMP/previews"
       - uses: actions/upload-artifact@v4
         with:

@@ -46,6 +46,8 @@ GitHub Actions 的成功构建提供 **Relay-Workspace-macOS** 安装包。下�
 | `GET /healthz` | 服务健康状态。 |
 | `GET /v1/workspace` | 返回 `{viewer, workspace: {items, entries, conflicts}}`，支持 `If-None-Match`。 |
 | `POST /v1/events` | 提交 `requestID`、`source`、`change` 以及可选的 `session`。本机演示模式还需提供 `actor`。新事件返回 201，同一请求重试返回原事件及 200，复用 ID 提交不同内容返回 409。 |
+| `GET /v1/functions`、`GET /v1/functions/:id` | 查看托管函数。详情含当前源码、版本和最近 30 次执行。 |
+| `PUT /v1/functions/:id`、`PATCH /v1/functions/:id` | 发布定义或修改启停状态。两者均使用成员身份和 `expectedRevision`。 |
 
 ## 已有本地工作空间
 
@@ -98,9 +100,39 @@ JSON
 | handoff / acknowledge | 交给 recipient 并填写 note。回应通过 reference 指向具体的交付事件。任务的 pause 和 handoff 可填 affectsRequirement，表示是否影响上级需求。 |
 | remind | due、recipient、note。指定当前暂停事件的 UUID 作为 reference 即可约定条件回看。 |
 
+## 服务端托管函数
+
+可以让 Agent 设置「事项暂停三天后，如果还在等人，就提醒负责人」。Agent 用 `relay_functions` 发布 JavaScript，Relay 服务负责计时、读取当时的事项并执行。发布者退出 Codex、关闭客户端或让自己的电脑休眠后，常驻服务器仍会工作。Mac、iPhone 和 iPad 的成员菜单都有「服务端自动化」，可查看谁发布了函数、何时运行、写了几条记录，也能暂停或恢复。
+
+将团队的 Node 服务作为常驻进程运行，给 `RELAY_DB` 配置持久目录。函数源码、触发时间、运行记录和事项共用这份 SQLite 数据库。服务重启后会接续到期的任务；错过多个 cron 周期时补跑一次，再转到下一个时间点。
+
+在仓库根目录可发布同一份示例。新函数使用版本 0；修改时先读取当前版本，版本冲突返回 409。
+
+```sh
+relay functions deploy < Examples/pause-review.json
+relay functions list
+relay functions get pause-review
+relay functions disable pause-review 1
+relay functions enable pause-review 2
+```
+
+| 触发条件 | 例子 |
+| --- | --- |
+| 指定时间 `at` | `{"kind":"at","at":"2030-06-03T09:00:00+08:00","itemID":"REQ-02"}` |
+| 周期 `cron` | `{"kind":"cron","expression":"0 9 * * 1-5","timezone":"Asia/Shanghai"}` |
+| 事项事件 `event` | `{"kind":"event","operation":"pause","delaySeconds":259200}` |
+
+`code` 是同步 JavaScript 函数体。上下文 `ctx` 包含发布人 `actor`、实际执行时间 `now`、原定时间 `scheduledAt`、函数 ID 与版本。事件触发时，`ctx.event` 是原始事件，`ctx.item` 是执行时的最新事项。定时触发可指定 `itemID`，省略后可用 `ctx.items` 查看工作空间事项。示例会比对当前 `pauseID` 与原事件 ID，已恢复或重新暂停的事项会跳过。事件订阅从发布后新写入的事件开始生效。MCP 工具支持 `list`、`get`、`deploy`、`enable` 和 `disable`，文件工作空间沿用原有读写工具。
+
+返回 `[]` 表示跳过，返回最多 8 个标准 `change` 对象即可写进工作日志。服务会校验整批变更，在一个事务中提交变更和运行结果，并记下发布人、函数 ID 和运行 ID。函数写出的事件不会再触发其他函数。改版或暂停会取消旧版本待处理的执行。代码错误会出现在运行记录里；进程故障或所读事项并发变化时最多尝试三次。
+
+每次调用都在独立子进程中的 QuickJS WebAssembly 环境执行，只接收工作空间数据；主机文件、Node API、网络和服务凭据对函数不可见。源码上限 32 KiB，输入 256 KiB，输出 32 KiB。解释器配置 8 MiB 内存及 150 毫秒执行预算，外层进程另有 4 秒截止时间。[QuickJS 运行时](https://github.com/justjake/quickjs-emscripten)
+
 ## 本地通知
 
 从工作空间菜单进入「提醒」，可以查看回看约定并允许系统通知。普通提醒在客户端同步后由系统调度。条件提醒会在客户端运行并读到最新记录时核对原暂停事件，离线或应用关闭可能延迟。提醒只匹配当前成员或全体成员（`*`）。同一成员的各台设备分别处理本地通知。
+
+托管函数可以返回 `remind` 将提醒写进团队日志。服务端执行完成后，成员会在设备下一次同步时收到符合条件的提醒。系统横幅仍取决于设备的通知授权和同步时机。
 
 ## 开发与验证
 

@@ -3,18 +3,19 @@ set -euo pipefail
 app="$1"
 out="$2"
 mkdir -p "$out"
-workspace_reads() {
-    awk '$0 == "GET /v1/workspace 200" {count++} END {print count+0}' "$RELAY_TEST_ACCESS_LOG"
+successful_reads() {
+    awk -v path="$1" '$0 == "GET /v1/" path " 200" {count++} END {print count+0}' "$RELAY_TEST_ACCESS_LOG"
 }
 launch_and_wait() {
-    local device="$1" family="$2" before=0
+    local device="$1" family="$2" before=0 route=workspace
     shift 2
-    if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then before=$(workspace_reads); fi
+    if [[ "${1:-}" == "--preview-hosted-functions" ]]; then route=functions; fi
+    if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then before=$(successful_reads "$route"); fi
     xcrun simctl launch --terminate-running-process "$device" io.github.wang-sy.RelayWorkspace "$@"
     if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then
-        for ((i=0; i<30 && $(workspace_reads)<=before; i++)); do sleep 1; done
-        if (( $(workspace_reads) <= before )); then
-            echo "$family did not load the HTTP workspace" >&2
+        for ((i=0; i<30 && $(successful_reads "$route")<=before; i++)); do sleep 1; done
+        if (( $(successful_reads "$route") <= before )); then
+            echo "$family did not load /v1/$route" >&2
             exit 1
         fi
     else
@@ -46,5 +47,7 @@ while read -r device family; do
     done
     launch_and_wait "$device" "$family" --preview-workspace
     xcrun simctl io "$device" screenshot "$out/$family-workspace.png"
+    launch_and_wait "$device" "$family" --preview-hosted-functions
+    xcrun simctl io "$device" screenshot "$out/$family-functions.png"
     xcrun simctl shutdown "$device"
 done <<< "$devices"

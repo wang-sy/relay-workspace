@@ -46,6 +46,10 @@ final class WorkspaceModel: ObservableObject {
   var usesSavedToken: Bool { serverAddress.map(hasToken) ?? false }
   private let alerts = LocalAlerts()
   private var journal: WorkspaceJournal?
+  var hostedService: RemoteJournal? {
+    if case .server(let service) = journal { return service }
+    return nil
+  }
   private var grant: URL?
   private var started = false
   private var generation = 0

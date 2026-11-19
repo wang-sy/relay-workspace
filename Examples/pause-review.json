@@ -1,0 +1,11 @@
+{
+  "id": "pause-review",
+  "expectedRevision": 0,
+  "name": "暂停三天后回看",
+  "trigger": {
+    "kind": "event",
+    "operation": "pause",
+    "delaySeconds": 259200
+  },
+  "code": "const item = ctx.item;\nif (!item || item.closed || item.pauseID !== ctx.event.id) return [];\nreturn [{ operation: 'remind', itemID: item.id, reference: ctx.event.id, recipient: ctx.event.change.recipient || ctx.actor, due: ctx.now, note: '「' + item.title + '」已暂停三天，请回看进展。' }];"
+}

@@ -13,6 +13,7 @@
 		88937F69F47B48EB893F3313 /* ItemDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */; };
 		F95AE34ECD16618E6CBB3FD1 /* RequirementCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DDB350688653D25D92F134F /* RequirementCards.swift */; };
 		9E3A4B7AF31848A8B0770DF3 /* RequirementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38F4117D0F8466694D2C9E0 /* RequirementsView.swift */; };
+		0C335DA6F283446180B1A721 /* HostedFunctionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93AA26AE2A094A459AA9F0A4 /* HostedFunctionsView.swift */; };
 		3BFDD6655D5E6C8D631D5510 /* RelayStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F49DDFD0C297C2D7B6D74A /* RelayStyle.swift */; };
 		BE5736623CA0BD14FD63450F /* RequirementSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = E24F6CB4D93C6013A8871D7F /* RequirementSchedule.swift */; };
 		6D0D7B0705925FC59607994A /* WorkspaceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FB4C65F9CE53FDC2738BCAA /* WorkspaceViews.swift */; };
@@ -62,6 +63,7 @@
 		30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ItemDetails.swift; sourceTree = "<group>"; };
 		8DDB350688653D25D92F134F /* RequirementCards.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequirementCards.swift; sourceTree = "<group>"; };
 		B38F4117D0F8466694D2C9E0 /* RequirementsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequirementsView.swift; sourceTree = "<group>"; };
+		93AA26AE2A094A459AA9F0A4 /* HostedFunctionsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HostedFunctionsView.swift; sourceTree = "<group>"; };
 		40F49DDFD0C297C2D7B6D74A /* RelayStyle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RelayStyle.swift; sourceTree = "<group>"; };
 		E24F6CB4D93C6013A8871D7F /* RequirementSchedule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RequirementSchedule.swift; sourceTree = "<group>"; };
 		9FB4C65F9CE53FDC2738BCAA /* WorkspaceViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkspaceViews.swift; sourceTree = "<group>"; };
@@ -126,6 +128,7 @@
 				30A3E9CF7B244DA261CC0A30 /* ItemDetails.swift */,
 				8DDB350688653D25D92F134F /* RequirementCards.swift */,
 				B38F4117D0F8466694D2C9E0 /* RequirementsView.swift */,
+				93AA26AE2A094A459AA9F0A4 /* HostedFunctionsView.swift */,
 				40F49DDFD0C297C2D7B6D74A /* RelayStyle.swift */,
 				E24F6CB4D93C6013A8871D7F /* RequirementSchedule.swift */,
 				9FB4C65F9CE53FDC2738BCAA /* WorkspaceViews.swift */,
@@ -263,6 +266,7 @@
 				88937F69F47B48EB893F3313 /* ItemDetails.swift in Sources */,
 				F95AE34ECD16618E6CBB3FD1 /* RequirementCards.swift in Sources */,
 				9E3A4B7AF31848A8B0770DF3 /* RequirementsView.swift in Sources */,
+				0C335DA6F283446180B1A721 /* HostedFunctionsView.swift in Sources */,
 				3BFDD6655D5E6C8D631D5510 /* RelayStyle.swift in Sources */,
 				BE5736623CA0BD14FD63450F /* RequirementSchedule.swift in Sources */,
 				6D0D7B0705925FC59607994A /* WorkspaceViews.swift in Sources */,

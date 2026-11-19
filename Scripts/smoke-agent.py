@@ -8,6 +8,7 @@ from pathlib import Path
 import selectors
 import subprocess
 import tempfile
+import time
 import urllib.request
 import uuid
 
@@ -60,7 +61,10 @@ def exercise(cmd, env):
     output = subprocess.run(cmd + ["mcp"], input=frames, text=True, capture_output=True, check=True, env=env, timeout=30)
     responses = [json.loads(line)["result"] for line in output.stdout.splitlines()]
     assert len(responses) == 4 and responses[0]["protocolVersion"] == "2025-11-25"
-    assert {t["name"] for t in responses[1]["tools"]} == {"relay_read", "relay_apply"}
+    expected = {"relay_read", "relay_apply"}
+    if "--server" in cmd:
+        expected.add("relay_functions")
+    assert {t["name"] for t in responses[1]["tools"]} == expected
     assert json.loads(responses[2]["content"][0]["text"])["actor"] == "test-member"
     state = json.loads(responses[3]["content"][0]["text"])
     assert len(state["items"]) == len(state["entries"]) == 1 and not state["conflicts"]
@@ -98,6 +102,46 @@ def exercise_board(cmd, env):
     assert finished["phase"] == "completedToday" and finished["summary"] == "Import retry shipped"
 
 
+def exercise_functions(cmd, env):
+    definition = json.loads((server_entry.parents[2] / "Examples/pause-review.json").read_text())
+    definition["trigger"]["delaySeconds"] = 1
+    definition["trigger"]["itemID"] = "t"
+    def cli(arguments, body=None):
+        reply = subprocess.run(cmd + arguments, input=json.dumps(body) if body else None,
+                               capture_output=True, text=True, check=True, env=env, timeout=15)
+        return json.loads(reply.stdout)
+
+    calls = [
+        {"id": 1, "method": "initialize", "params": {}},
+        {"id": 2, "method": "tools/call", "params": {"name": "relay_functions",
+            "arguments": {"action": "deploy", **definition}}},
+    ]
+    frames = "".join(json.dumps(dict(jsonrpc="2.0", **call)) + "\n" for call in calls)
+    mcp = subprocess.run(cmd + ["mcp"], input=frames, capture_output=True, text=True, check=True, env=env, timeout=15)
+    deployed = json.loads(json.loads(mcp.stdout.splitlines()[-1])["result"]["content"][0]["text"])
+    assert deployed["actor"] == "test-member" and deployed["revision"] == 1
+    pause = {"requestID": str(uuid.uuid4()), "change": {"operation": "pause", "itemID": "t", "recipient": "reviewer"}}
+    cli(["apply"], pause)
+    cli(["apply"], pause)
+    # The publishing MCP process and both CLI writers have already exited.
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        function = cli(["functions", "get", definition["id"]])
+        if function["runs"] and function["runs"][0]["status"] == "succeeded":
+            break
+        time.sleep(0.25)
+    else:
+        raise AssertionError(function)
+    assert len(function["runs"]) == 1 and function["runs"][0]["writes"] == 1
+    reminders = [e for e in cli(["read"])["entries"] if e["change"]["operation"] == "remind"]
+    assert len(reminders) == 1 and reminders[0]["change"]["recipient"] == "reviewer"
+    assert reminders[0]["change"]["reference"].lower() == pause["requestID"]
+    assert cli(["functions", "disable", definition["id"], "1"])["enabled"] is False
+    definition.update(expectedRevision=2, name="Updated pause review")
+    assert cli(["functions", "deploy"], definition)["revision"] == 3
+    assert cli(["functions", "list"])[0]["name"] == definition["name"]
+
+
 with tempfile.TemporaryDirectory() as folder:
     if args.service:
         with backend(Path(folder)) as (address, token):
@@ -110,7 +154,8 @@ with tempfile.TemporaryDirectory() as folder:
             assert remote["workspace"]["items"] == snapshot["items"]
             assert len(remote["workspace"]["entries"]) == 1
             exercise_board([binary, "--server", address], env)
-        print("Swift CLI and MCP share one durable, attributed HTTP write.")
+            exercise_functions([binary, "--server", address], env)
+        print("Swift CLI and MCP share attributed events and a server-hosted delayed function.")
     else:
         cmd = [binary, "--workspace", folder]
         env = dict(os.environ, RELAY_ACTOR="test-member")

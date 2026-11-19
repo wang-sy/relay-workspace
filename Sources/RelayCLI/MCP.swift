@@ -66,7 +66,44 @@ private let descriptors: [Object] = [
   ],
 ]
 
+private let functionTool: Object = [
+  "name": "relay_functions",
+  "description":
+    "Manage JavaScript functions hosted on the Relay server. list or get first. get returns code, revision and recent runs. deploy uses expectedRevision 0 for creation, the current revision for replacement. Jobs survive client disconnects.",
+  "inputSchema": [
+    "type": "object", "required": ["action"], "additionalProperties": false,
+    "properties": [
+      "action": ["type": "string", "enum": ["list", "get", "deploy", "enable", "disable"]],
+      "id": prop("Stable lowercase function ID for all actions except list."),
+      "expectedRevision": [
+        "type": "integer", "minimum": 0, "description": "Required for mutations.",
+      ],
+      "name": prop("Display name, required for deploy."),
+      "enabled": ["type": "boolean", "description": "Set false to save a paused definition."],
+      "trigger": [
+        "type": "object", "required": ["kind"], "additionalProperties": false,
+        "properties": [
+          "kind": ["type": "string", "enum": ["event", "at", "cron"]],
+          "operation": ["type": "string", "enum": WorkOperation.allCases.map(\.rawValue)],
+          "itemID": prop("Optional target. Event triggers match all items if omitted."),
+          "delaySeconds": [
+            "type": "integer", "minimum": 0, "description": "Optional delay following an event.",
+          ],
+          "at": prop("ISO 8601 timestamp with timezone, required for at."),
+          "expression": prop("Five-field cron expression, required for cron."),
+          "timezone": prop("IANA timezone, required for cron."),
+        ],
+      ],
+      "code": prop(
+        "Synchronous JavaScript function body. ctx has current item, original event, now, scheduledAt, actor, functionID, revision, and items for unscoped timers. Return [] to skip or up to 8 standard relay_apply change objects. For remind include itemID, due, recipient and note. For delayed pauses check ctx.item?.pauseID === ctx.event?.id first. Relay commits actions together. No Node or network access."
+      ),
+    ],
+  ],
+]
+
 func serveMCP(_ tools: AgentTools) async {
+  var available = descriptors
+  if case .server = tools.journal { available.append(functionTool) }
   func reply(_ id: Any, _ key: String, _ payload: Any) {
     let message: Object = ["jsonrpc": "2.0", "id": id, key: payload]
     if var data = try? JSONSerialization.data(withJSONObject: message) {
@@ -103,7 +140,7 @@ func serveMCP(_ tools: AgentTools) async {
           "serverInfo": ["name": "relay-workspace", "version": "0.1.0"],
         ])
     case "ping": reply(id, "result", Object())
-    case "tools/list" where initialized: reply(id, "result", ["tools": descriptors])
+    case "tools/list" where initialized: reply(id, "result", ["tools": available])
     case "tools/call" where initialized:
       let args = p["arguments"] as? Object ?? [:]
       do {
@@ -112,6 +149,11 @@ func serveMCP(_ tools: AgentTools) async {
         case "relay_read": data = try await tools.read(args["scope"] as? String ?? "workspace")
         case "relay_apply":
           data = try await tools.write(JSONSerialization.data(withJSONObject: args))
+        case "relay_functions":
+          guard let action = args["action"] as? String else {
+            throw RelayError("Provide a function action")
+          }
+          data = try await tools.functions(action, args)
         default:
           reply(id, "error", ["code": -32602, "message": "Unknown tool"])
           continue

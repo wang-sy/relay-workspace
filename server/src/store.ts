@@ -4,9 +4,12 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { isDeepStrictEqual } from "node:util";
 import { ApiError, project, type Entry, type Item, type Write } from "./domain.js";
+import { HostedFunctions } from "./functions.js";
+import { iso } from "./function-contract.js";
 
 export class JournalStore {
   private readonly db: DatabaseSync;
+  readonly functions: HostedFunctions;
 
   constructor(path: string) {
     if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
@@ -16,6 +19,10 @@ export class JournalStore {
       "CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, time TEXT NOT NULL, request TEXT NOT NULL);" +
       "CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, value TEXT NOT NULL)"
     );
+    this.functions = new HostedFunctions(this.db, {
+      transaction: body => this.transaction(true, body), item: id => this.item(id), event: id => this.event(id),
+      append: (write, time) => this.insert(write, time, "append"),
+    });
   }
 
   close() { this.db.close(); }
@@ -56,18 +63,23 @@ export class JournalStore {
       return { entry: this.toEntry(Number(row.seq), String(row.time), write), created: false };
     }
     const item = project(write, id => this.item(id), id => this.event(id));
-    if (mode === "append" && item.kind === "requirement" && write.change.operation === "close" && !write.change.note?.trim()) {
+    if (mode !== "import" && item.kind === "requirement" && write.change.operation === "close" && !write.change.note?.trim()) {
       throw new ApiError(422, "请写清楚这个需求完成了什么");
     }
     const result = this.db.prepare("INSERT INTO events(id, time, request) VALUES (?, ?, ?)")
       .run(write.requestID, time, JSON.stringify(write));
     this.db.prepare("INSERT INTO items(id, value) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET value = excluded.value")
       .run(item.id, JSON.stringify(item));
-    return { entry: this.toEntry(Number(result.lastInsertRowid), time, write), created: true };
+    const entry = this.toEntry(Number(result.lastInsertRowid), time, write);
+    return { entry, created: true };
   }
 
-  append(write: Write) {
-    return this.transaction(true, () => this.insert(write, new Date().toISOString().replace(/\.\d{3}Z$/, "Z"), "append"));
+  append(write: Write, now = Date.now()) {
+    return this.transaction(true, () => {
+      const result = this.insert(write, iso(now), "append");
+      if (result.created) this.functions.onEvent(result.entry, now);
+      return result;
+    });
   }
 
   import(entries: Entry[]) {

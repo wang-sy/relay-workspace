@@ -138,6 +138,42 @@ public struct RemoteJournal: Sendable {
     let (data, _) = try await send(req, accepting: [200, 201])
     return try Wire.decoder().decode(Entry.self, from: data)
   }
+
+  public func functions() async throws -> [HostedFunction] {
+    let (data, _) = try await send(request("functions"), accepting: [200])
+    return try Wire.decoder().decode([HostedFunction].self, from: data)
+  }
+
+  private func functionRequest(_ id: String, method: String, body: Data? = nil) async throws
+    -> HostedFunction
+  {
+    guard id.range(of: #"^[a-z0-9][a-z0-9_-]{0,63}\z"#, options: .regularExpression) != nil
+    else { throw RelayError("函数 ID 可使用小写字母、数字、连字符和下划线") }
+    var req = request("functions/" + id)
+    req.httpMethod = method
+    if let body {
+      req.httpBody = body
+      req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    }
+    let (data, _) = try await send(req, accepting: [200])
+    return try Wire.decoder().decode(HostedFunction.self, from: data)
+  }
+
+  public func function(_ id: String) async throws -> HostedFunction {
+    try await functionRequest(id, method: "GET")
+  }
+
+  public func deployFunction(_ id: String, body: Data) async throws -> HostedFunction {
+    try await functionRequest(id, method: "PUT", body: body)
+  }
+
+  public func setFunctionEnabled(_ id: String, revision: Int, enabled: Bool, actor: String)
+    async throws -> HostedFunction
+  {
+    let body: [String: Any] = ["expectedRevision": revision, "enabled": enabled, "actor": actor]
+    return try await functionRequest(
+      id, method: "PATCH", body: JSONSerialization.data(withJSONObject: body))
+  }
 }
 
 public enum ServerCredentials {
