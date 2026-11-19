@@ -29,7 +29,7 @@ final class WorkspaceModel: ObservableObject {
   @Published private(set) var state = Workspace()
   @Published private(set) var root = Journal.local.root
   @Published private(set) var serverAddress: String?
-  @Published private(set) var serverIssue: String?
+  @Published private(set) var sourceIssue: String?
   @Published private(set) var hasSnapshot = false
   @Published private(set) var viewer: String?
   @Published var problem: String?
@@ -67,8 +67,10 @@ final class WorkspaceModel: ObservableObject {
     }
   }
 
-  private func hasToken(_ address: String) -> Bool {
-    UserDefaults.standard.stringArray(forKey: "relay.savedTokens")?.contains(address) == true
+  func hasToken(_ address: String) -> Bool {
+    guard let url = try? RemoteJournal.endpoint(address) else { return false }
+    return UserDefaults.standard.stringArray(forKey: "relay.savedTokens")?.contains(
+      url.absoluteString) == true
   }
 
   func start() async {
@@ -79,7 +81,7 @@ final class WorkspaceModel: ObservableObject {
         let endpoint = try RemoteJournal.endpoint(serverAddress)
         let token = hasToken(endpoint.absoluteString) ? try ServerCredentials.read(endpoint) : nil
         journal = .server(try RemoteJournal(address: serverAddress, token: token))
-      } catch { serverIssue = error.localizedDescription }
+      } catch { sourceIssue = error.localizedDescription }
       return
     }
     if let data = UserDefaults.standard.data(forKey: "relay.folder") {
@@ -93,18 +95,28 @@ final class WorkspaceModel: ObservableObject {
         let url = try URL(
           resolvingBookmarkData: data, options: options, relativeTo: nil,
           bookmarkDataIsStale: &stale)
-        try attach(url)
-      } catch { problem = "请在工作空间设置中重新选择共享文件夹。\(error.localizedDescription)" }
+        try await openFolder(url)
+      } catch is CancellationError { return } catch {
+        sourceIssue = "请在工作空间设置中重新选择共享文件夹。\(error.localizedDescription)"
+      }
     } else {
       journal = .folder(.local)
     }
+  }
+
+  func retry() async {
+    if journal == nil {
+      started = false
+      await start()
+    }
+    await refresh()
   }
 
   private func reset(to source: WorkspaceJournal) {
     generation += 1
     journal = source
     etag = nil
-    serverIssue = nil
+    sourceIssue = nil
     viewer = nil
     hasSnapshot = false
     state = Workspace()
@@ -137,44 +149,40 @@ final class WorkspaceModel: ObservableObject {
     await updateNotifications(version: generation, serial: readSerial)
   }
 
-  private func attach(_ url: URL) throws {
-    let scoped = url.startAccessingSecurityScopedResource()
+  func openFolder(_ url: URL?) async throws {
+    choice += 1
+    let attempt = choice
+    let folder = url.map(Journal.init) ?? .local
+    let scoped = url?.startAccessingSecurityScopedResource() == true
     do {
-      #if os(macOS)
-        let options: URL.BookmarkCreationOptions = [.withSecurityScope]
-      #else
-        let options: URL.BookmarkCreationOptions = [.minimalBookmark]
-      #endif
-      let bookmark = try url.bookmarkData(
-        options: options, includingResourceValuesForKeys: nil, relativeTo: nil)
-      _ = try Journal(url).read()
-      UserDefaults.standard.set(bookmark, forKey: "relay.folder")
+      let source = WorkspaceJournal.folder(folder)
+      let update = try await source.read()
+      guard attempt == choice else { throw CancellationError() }
+      let defaults = UserDefaults.standard
+      if let url {
+        #if os(macOS)
+          let options: URL.BookmarkCreationOptions = [.withSecurityScope]
+        #else
+          let options: URL.BookmarkCreationOptions = [.minimalBookmark]
+        #endif
+        let bookmark = try url.bookmarkData(
+          options: options, includingResourceValuesForKeys: nil, relativeTo: nil)
+        defaults.set(bookmark, forKey: "relay.folder")
+      } else {
+        defaults.removeObject(forKey: "relay.folder")
+      }
+      grant?.stopAccessingSecurityScopedResource()
+      grant = scoped ? url : nil
+      root = folder.root
+      reset(to: source)
+      serverAddress = nil
+      defaults.set("folder", forKey: "relay.mode")
+      apply(update)
+      await updateNotifications(version: generation, serial: readSerial)
     } catch {
-      if scoped { url.stopAccessingSecurityScopedResource() }
+      if scoped { url?.stopAccessingSecurityScopedResource() }
       throw error
     }
-    grant?.stopAccessingSecurityScopedResource()
-    grant = scoped ? url : nil
-    root = url
-    reset(to: .folder(Journal(url)))
-  }
-
-  func select(_ url: URL?) async {
-    choice += 1
-    do {
-      if let url {
-        try attach(url)
-      } else {
-        UserDefaults.standard.removeObject(forKey: "relay.folder")
-        grant?.stopAccessingSecurityScopedResource()
-        grant = nil
-        root = Journal.local.root
-        reset(to: .folder(.local))
-      }
-      serverAddress = nil
-      UserDefaults.standard.set("folder", forKey: "relay.mode")
-      await refresh()
-    } catch { problem = error.localizedDescription }
   }
 
   private func apply(_ update: JournalUpdate) {
@@ -184,7 +192,7 @@ final class WorkspaceModel: ObservableObject {
       hasSnapshot = true
     }
     etag = update.etag
-    serverIssue = nil
+    sourceIssue = nil
   }
 
   func refresh() async {
@@ -198,11 +206,7 @@ final class WorkspaceModel: ObservableObject {
       apply(update)
     } catch {
       guard version == generation, serial == readSerial, !Task.isCancelled else { return }
-      if serverAddress != nil {
-        serverIssue = error.localizedDescription
-      } else {
-        problem = error.localizedDescription
-      }
+      sourceIssue = error.localizedDescription
       return
     }
     await updateNotifications(version: version, serial: serial)

@@ -17,7 +17,7 @@ npm run build
 npm start
 ```
 
-打开 Mac 客户端。首次启动默认连接 `http://127.0.0.1:8731`。新的团队数据库为空，可以从客户端新建方向或让 Agent 写入第一条探索。需要使用其他服务时，在客户端的“工作空间”中填入服务地址并连接。每台真机的回环地址都指向设备自身，iPhone 和 iPad 连接团队服务时使用设备可达的 HTTPS 地址。
+打开 Mac 客户端。首次启动默认连接 `http://127.0.0.1:8731`。新的团队数据库为空，可以从客户端新建方向或让 Agent 写入第一条探索。需要使用其他服务时，打开侧栏「工作空间」，点「切换工作空间」输入服务地址。连接成功后可直接进入「团队概览」。每台真机的回环地址都指向设备自身，iPhone 和 iPad 连接团队服务时使用设备可达的 HTTPS 地址。
 
 ## 安装原生客户端
 
@@ -47,7 +47,7 @@ GitHub Actions 的成功构建提供 **Relay-Workspace-macOS** 安装包。下�
 
 ## 已有本地工作空间
 
-“工作空间”保留打开本地记录和共享文件夹的入口。此前明确选择过共享文件夹的设备会沿用原选择。切换到服务时，应用不会自动上传旧文件。部署者可以将完整下载的旧 `RelayEvents` 目录导入一个空数据库，保留原事件 ID、时间和署名。出现冲突会回滚整批导入。
+在「工作空间」点「切换工作空间」，选择「本地记录」，即可打开此设备上的记录或选取已有文件夹。此前明确选择过共享文件夹的设备会沿用原选择。切换到服务时，应用不会自动上传旧文件。部署者可以将完整下载的旧 `RelayEvents` 目录导入一个空数据库，保留原事件 ID、时间和署名。出现冲突会回滚整批导入。
 
 ```sh
 # 在 server/ 目录中执行，使用与服务相同的 RELAY_DB
@@ -58,12 +58,14 @@ npm run import-journal -- "/path/to/workspace/RelayEvents"
 
 ## 本地 Agent
 
-Mac 应用包含 `relay` CLI。“工作空间”提供与当前连接匹配的 Codex 接入命令。下面是本机服务的配置示例。
+Mac 应用包含 `relay` CLI。打开侧栏「工作空间」→「连接助手」，选 Codex 或 Claude Code，再点「添加到…」。Relay 用已安装的助手命令行工具为当前看板添加个人配置。新开一个助手对话，可以问「团队有哪些需求在等人接手？」。iPhone 和 iPad 连接同一团队服务后也能看到助手写入的进展。
+
+「手动设置」可复制适配当前工作空间和署名的终端命令。下面是本机服务的示例。
 
 ```sh
 relay_bin="/Applications/Relay Workspace.app/Contents/MacOS/relay"
 codex mcp add relay -- "$relay_bin" --server http://127.0.0.1:8731 mcp
-claude mcp add --transport stdio relay -- "$relay_bin" --server http://127.0.0.1:8731 mcp
+claude mcp add --scope user --transport stdio relay -- "$relay_bin" --server http://127.0.0.1:8731 mcp
 ```
 
 CLI 和 MCP 默认连接本机服务，`--server` 或 `RELAY_SERVER_URL` 可以指定团队地址。令牌可通过运行进程的 `RELAY_TOKEN` 环境变量提供，或加上 `--keychain` 读取应用为该服务保存的令牌。要访问文件工作空间，显式传入 `--workspace DIRECTORY`。在本机演示或文件模式下可以设置 `RELAY_ACTOR` 指定署名，`RELAY_AGENT` 用于记录工具来源。
