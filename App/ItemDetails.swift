@@ -24,7 +24,7 @@ struct ItemDetails: View {
         Text(item.title).font(.largeTitle.weight(.semibold)).accessibilityAddTraits(.isHeader)
         HStack(spacing: 7) {
           Text(item.kind.label).font(.subheadline).foregroundStyle(RelayPalette.secondary)
-          StatusLabel(text: item.closed ? "已完成" : item.status, tone: item.kind.tone)
+          StatusLabel(text: item.displayStatus, tone: item.kind.tone)
           if let category = item.category, !category.isEmpty {
             Text(category).font(.subheadline).foregroundStyle(RelayPalette.secondary)
           }

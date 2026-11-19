@@ -128,7 +128,7 @@ struct RequirementsView: View {
     _ item: Item, depth: Int, count: Int = 0, expanded: Bool = false, compact: Bool,
     toggle: (() -> Void)? = nil
   ) -> some View {
-    let status = item.closed ? "已完成" : item.status
+    let status = item.displayStatus
     let members = item.members.map(\.name).joined(separator: "、")
     let countLabel = count > 0 ? "\(count) 个\(depth == 0 ? "需求" : "任务")" : ""
     let summary = [countLabel, members, status].filter { !$0.isEmpty }.joined(separator: " · ")

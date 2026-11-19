@@ -1,6 +1,10 @@
 import RelayCore
 import SwiftUI
 
+extension Item {
+  var displayStatus: String { closed ? "已完成" : status }
+}
+
 extension ItemKind {
   var label: String {
     switch self {
@@ -78,7 +82,7 @@ struct ItemLink: View {
           }
         }
         Spacer(minLength: 4)
-        StatusLabel(text: item.closed ? "已完成" : item.status, tone: item.kind.tone)
+        StatusLabel(text: item.displayStatus, tone: item.kind.tone)
       }.padding(.vertical, 7).padding(.horizontal, 2)
     }.buttonStyle(RelayRowStyle())
   }
