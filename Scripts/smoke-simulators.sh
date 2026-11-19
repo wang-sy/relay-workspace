@@ -7,15 +7,19 @@ successful_reads() {
     awk -v path="$1" '$0 == "GET /v1/" path " 200" {count++} END {print count+0}' "$RELAY_TEST_ACCESS_LOG"
 }
 launch_and_wait() {
-    local device="$1" family="$2" before=0 route=workspace
+    local device="$1" family="$2" before=0 reads=1 route=workspace
     shift 2
     if [[ "${1:-}" == "--preview-hosted-functions" ]]; then route=functions; fi
-    if [[ "${1:-}" == "--preview-context" ]]; then route=context/recall; fi
+    if [[ "${1:-}" == "--preview-context" ]]; then
+        route=context/recall
+        # The first response arrives during navigation. Capture after the detail view's next refresh.
+        reads=2
+    fi
     if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then before=$(successful_reads "$route"); fi
     xcrun simctl launch --terminate-running-process "$device" io.github.wang-sy.RelayWorkspace "$@"
     if [[ -n "${RELAY_TEST_ACCESS_LOG:-}" ]]; then
-        for ((i=0; i<30 && $(successful_reads "$route")<=before; i++)); do sleep 1; done
-        if (( $(successful_reads "$route") <= before )); then
+        for ((i=0; i<30 && $(successful_reads "$route")<before+reads; i++)); do sleep 1; done
+        if (( $(successful_reads "$route") < before+reads )); then
             echo "$family did not load /v1/$route" >&2
             exit 1
         fi

@@ -82,6 +82,9 @@ struct ItemDetails: View {
       }
     }
     .navigationTitle(state.label(.item, item.kind.rawValue) + "详情")
+    #if os(iOS)
+      .navigationBarTitleDisplayMode(.inline)
+    #endif
   }
 
   private func gapNote(_ gap: Gap, entry: Entry?) -> some View {
