@@ -15,6 +15,9 @@ private func isDeviceService(_ address: String) -> Bool {
 struct WorkspaceSettings: View {
   @EnvironmentObject private var model: WorkspaceModel
   @Environment(\.dynamicTypeSize) private var typeSize
+  #if os(iOS)
+    @Environment(\.colorScheme) private var colorScheme
+  #endif
   @State private var action: SettingsAction?
   @State private var retrying = false
   #if os(macOS)
@@ -67,6 +70,9 @@ struct WorkspaceSettings: View {
           PanelTitle("当前工作空间")
           Spacer()
           Button("切换工作空间…") { action = .workspace }
+            #if os(iOS)
+              .foregroundStyle(RelayPalette.accent)
+            #endif
         }
         RelayPanel(spacing: 16) {
           HStack(alignment: .top, spacing: 13) {
@@ -88,6 +94,9 @@ struct WorkspaceSettings: View {
                 .fixedSize(horizontal: false, vertical: true)
               if model.hasSnapshot {
                 Button("查看团队概览", action: showBoard).buttonStyle(.borderedProminent)
+                  #if os(iOS)
+                    .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+                  #endif
                   .padding(.top, 4)
               } else if model.sourceIssue != nil {
                 Button(retrying ? "正在重试…" : "重试") {
@@ -97,6 +106,9 @@ struct WorkspaceSettings: View {
                     retrying = false
                   }
                 }.buttonStyle(.borderedProminent).disabled(retrying)
+                  #if os(iOS)
+                    .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+                  #endif
               }
             }
           }
@@ -119,6 +131,9 @@ struct WorkspaceSettings: View {
                 .font(.caption).foregroundStyle(RelayPalette.secondary)
             } else if !pending {
               Button("修改署名…") { action = .signature }.buttonStyle(.borderless)
+                #if os(iOS)
+                  .foregroundStyle(RelayPalette.accent)
+                #endif
             }
           }
         }
