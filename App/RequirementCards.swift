@@ -36,7 +36,7 @@ struct RequirementCards: View {
                   Text("\(lane.items.count)").font(.caption.monospacedDigit()).foregroundStyle(
                     RelayPalette.muted
                   )
-                  .accessibilityLabel("\(lane.items.count) 个需求")
+                  .accessibilityLabel("\(lane.items.count) 个事项")
                 }.padding(.horizontal, 3).padding(.vertical, 4)
                 ForEach(lane.items) { item in
                   card(item, row: rows[item.id])

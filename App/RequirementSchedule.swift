@@ -10,6 +10,10 @@ struct RequirementSchedule: View {
   let width: CGFloat
   let today: Date
 
+  private var itemNoun: String {
+    items.allSatisfy { $0.kind == .requirement } ? "需求" : "事项"
+  }
+
   var body: some View {
     let calendar = RelayDate.calendar
     let currentWeek =
@@ -45,7 +49,7 @@ struct RequirementSchedule: View {
       }
       HStack(spacing: 12) {
         if !compact {
-          Text("需求").font(.caption.weight(.medium)).foregroundStyle(RelayPalette.muted)
+          Text(itemNoun).font(.caption.weight(.medium)).foregroundStyle(RelayPalette.muted)
             .frame(width: labelWidth, alignment: .leading)
             .accessibilityHidden(true)
         }
@@ -61,7 +65,7 @@ struct RequirementSchedule: View {
       }.padding(.vertical, 3)
       Hairline()
       if weekItems.isEmpty {
-        QuietMessage(symbol: "calendar", text: "这一周没有排定的需求")
+        QuietMessage(symbol: "calendar", text: "这一周没有排定的" + itemNoun)
         if let nearest = items.compactMap({ item -> Date? in
           guard let from = item.start, let to = item.end else { return nil }
           return to < start ? to : from
@@ -94,7 +98,7 @@ struct RequirementSchedule: View {
 
   private func title(legend: Bool) -> some View {
     HStack(spacing: 11) {
-      PanelTitle("需求排期")
+      PanelTitle(itemNoun + "排期")
       if legend {
         Label("计划节点", systemImage: "diamond.fill")
           .font(.caption).foregroundStyle(RelayPalette.muted)
@@ -146,8 +150,9 @@ struct RequirementSchedule: View {
       let dates = [item.start, item.end].compactMap { $0 }.map(RelayDate.short).joined(
         separator: " – ")
       let members = item.members.map(\.name).joined(separator: "、")
+      let kind = item.kind == .requirement ? "" : model.state.label(.item, item.kind.rawValue)
       Text(
-        [dates, members, model.state.status(of: item)].filter { !$0.isEmpty }.joined(
+        [kind, dates, members, model.state.status(of: item)].filter { !$0.isEmpty }.joined(
           separator: " · ")
       )
       .font(.caption).foregroundStyle(RelayPalette.secondary)
@@ -210,7 +215,7 @@ private struct WeekTrack: View {
     }
     .frame(height: 24)
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(milestones.isEmpty ? "需求排期" : milestoneSummary(milestones))
+    .accessibilityLabel(milestones.isEmpty ? "排期" : milestoneSummary(milestones))
   }
 
   @ViewBuilder private func endMark(continues: Bool, symbol: String) -> some View {
