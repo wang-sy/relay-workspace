@@ -73,7 +73,7 @@
       }.joined(separator: " ")
     }
 
-    public func register(with client: LocalAssistant) async throws -> AssistantRegistration {
+    private static func command(for client: LocalAssistant) throws -> (URL, [String: String]) {
       let environment = ProcessInfo.processInfo.environment
       let home = FileManager.default.homeDirectoryForCurrentUser
       var folders = (environment["PATH"] ?? "").split(separator: ":").map(String.init)
@@ -100,7 +100,60 @@
       else { throw RelayError("未找到 \(client.rawValue) 命令行工具。如果你已能在终端使用它，请展开「手动设置」。") }
       var childEnvironment = environment
       childEnvironment["PATH"] = path
-      return try await register(with: client, executable: executable, environment: childEnvironment)
+      return (executable, childEnvironment)
+    }
+
+    private static let changes = DispatchQueue(label: "relay.assistant-registration")
+    private enum Existing { case missing, matches, other }
+
+    private func existing(
+      _ client: LocalAssistant, _ executable: URL, _ environment: [String: String]
+    ) throws -> Existing {
+      switch client {
+      case .codex:
+        let result = try Self.run(executable, ["mcp", "get", "relay", "--json"], environment)
+        if result.status != 0 {
+          if result.message.contains("No MCP server named 'relay' found") { return .missing }
+          throw RelayError("无法读取 Codex 的 relay 配置。请检查 Codex 是否可以正常启动。")
+        }
+        struct Entry: Decodable {
+          let enabled: Bool?
+          let transport: Transport
+        }
+        guard let entry = try? JSONDecoder().decode(Entry.self, from: result.output),
+          entry.enabled != false, matches(entry.transport, client: client)
+        else { return .other }
+      case .claude:
+        // 'claude mcp get' can launch the configured server. Decode only the named user entry.
+        struct Servers: Decodable { let relay: Transport? }
+        struct Config: Decodable { let mcpServers: Servers? }
+        let directory =
+          environment["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0) }
+          ?? FileManager.default.homeDirectoryForCurrentUser
+        do {
+          let data = try Data(contentsOf: directory.appendingPathComponent(".claude.json"))
+          guard let saved = try JSONDecoder().decode(Config.self, from: data).mcpServers?.relay
+          else { return .missing }
+          guard matches(saved, client: client) else { return .other }
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+          return .missing
+        } catch { throw RelayError("无法读取 Claude Code 的个人配置，请检查助手是否可以正常启动。") }
+      }
+      return .matches
+    }
+
+    public func configuredAssistants() async -> [LocalAssistant] {
+      await Task.detached(priority: .utility) {
+        LocalAssistant.allCases.filter { client in
+          guard let (executable, environment) = try? Self.command(for: client) else { return false }
+          return (try? existing(client, executable, environment)) == .matches
+        }
+      }.value
+    }
+
+    public func register(with client: LocalAssistant) async throws -> AssistantRegistration {
+      let (executable, environment) = try Self.command(for: client)
+      return try await register(with: client, executable: executable, environment: environment)
     }
 
     func register(with client: LocalAssistant, executable: URL, environment: [String: String])
@@ -111,42 +164,21 @@
         throw RelayError("找不到 Relay 自带的助手工具。请从完整的 Mac 应用中打开工作空间。")
       }
       return try await Task.detached(priority: .userInitiated) {
-        let conflict = RelayError("\(client.rawValue) 已有其他名为 relay 的配置，或该连接已停用。请在助手中移除旧配置后再添加。")
-        if client == .codex {
-          let existing = try Self.run(executable, ["mcp", "get", "relay", "--json"], environment)
-          if existing.status == 0 {
-            struct Entry: Decodable {
-              let enabled: Bool?
-              let transport: Transport
-            }
-            guard let entry = try? JSONDecoder().decode(Entry.self, from: existing.output),
-              entry.enabled != false, matches(entry.transport, client: client)
-            else { throw conflict }
-            return .alreadyAdded
+        try Self.changes.sync {
+          let conflict = RelayError("\(client.rawValue) 已有其他名为 relay 的配置，或该连接已停用。请在助手中移除旧配置后再添加。")
+          switch try existing(client, executable, environment) {
+          case .matches: return .alreadyAdded
+          case .other: throw conflict
+          case .missing: break
           }
-          guard existing.message.contains("No MCP server named 'relay' found") else {
-            throw RelayError("无法读取 Codex 的 relay 配置。请检查 Codex 是否可以正常启动。")
+          let result = try Self.run(executable, addArguments(for: client), environment)
+          // Read back what was saved, including when a second window just added the same entry.
+          switch try existing(client, executable, environment) {
+          case .matches: return result.status == 0 ? .added : .alreadyAdded
+          case .other: throw conflict
+          case .missing: throw RelayError("\(client.rawValue) 未能保存配置。可以展开「手动设置」在终端完成。")
           }
         }
-        let result = try Self.run(executable, addArguments(for: client), environment)
-        if result.status == 0 { return .added }
-        if client == .claude && result.message.contains("already exists in user config") {
-          // Only inspect the named user entry. 'claude mcp get' can start the configured server.
-          struct Servers: Decodable { let relay: Transport? }
-          struct Config: Decodable { let mcpServers: Servers? }
-          let directory =
-            environment["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0) }
-            ?? FileManager.default.homeDirectoryForCurrentUser
-          let file = directory.appendingPathComponent(".claude.json")
-          if let data = try? Data(contentsOf: file),
-            let saved = try? JSONDecoder().decode(Config.self, from: data).mcpServers?.relay,
-            matches(saved, client: client)
-          {
-            return .alreadyAdded
-          }
-          throw conflict
-        }
-        throw RelayError("\(client.rawValue) 未能保存配置。可以展开「手动设置」在终端完成。")
       }.value
     }
 

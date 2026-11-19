@@ -17,6 +17,19 @@ struct WorkspaceSettings: View {
   @Environment(\.dynamicTypeSize) private var typeSize
   @State private var action: SettingsAction?
   @State private var retrying = false
+  #if os(macOS)
+    @Environment(\.scenePhase) private var phase
+    @State private var checkedConnection: AssistantConnection?
+    @State private var checkedAssistants: [LocalAssistant] = []
+
+    private var assistants: [LocalAssistant] {
+      checkedConnection == model.assistantConnection ? checkedAssistants : []
+    }
+    private var connectionToCheck: AssistantConnection? {
+      phase == .active && model.hasSnapshot && action != .assistant
+        ? model.assistantConnection : nil
+    }
+  #endif
   let showBoard: () -> Void
 
   private var sourceName: String {
@@ -122,18 +135,25 @@ struct WorkspaceSettings: View {
               SymbolTile(
                 symbol: "bubble.left.and.text.bubble.right", tone: RelayPalette.teal, size: 36)
               VStack(alignment: .leading, spacing: 5) {
-                Text("让助手更新看板").font(.headline)
                 #if os(macOS)
-                  Text("连接后，你可以在 Codex 或 Claude Code 的对话里记录进展。")
-                    .font(.callout).foregroundStyle(RelayPalette.secondary)
+                  Text(
+                    assistants.isEmpty
+                      ? "让助手更新看板" : assistants.map(\.rawValue).joined(separator: "、") + " 已配置"
+                  ).font(.headline)
+                  Text(
+                    assistants.isEmpty
+                      ? "连接后，你可以在 Codex 或 Claude Code 的对话里记录进展。" : "在助手里新开一个对话，就可以查看需求或记录进展。"
+                  )
+                  .font(.callout).foregroundStyle(RelayPalette.secondary)
                 #else
+                  Text("让助手更新看板").font(.headline)
                   Text("在 Mac 上打开 Relay 的「工作空间」并连接助手。使用同一团队服务时，这里也能看到更新。")
                     .font(.callout).foregroundStyle(RelayPalette.secondary)
                 #endif
               }
             }.frame(maxWidth: .infinity, alignment: .leading)
             #if os(macOS)
-              Button("连接助手…") { action = .assistant }
+              Button(assistants.isEmpty ? "连接助手…" : "设置助手…") { action = .assistant }
                 .disabled(!model.hasSnapshot)
             #endif
           }
@@ -148,13 +168,22 @@ struct WorkspaceSettings: View {
         }
       }
     }
+    #if os(macOS)
+      .task(id: connectionToCheck) {
+        guard let connection = connectionToCheck else { return }
+        let result = await connection.configuredAssistants()
+        guard !Task.isCancelled, connection == connectionToCheck else { return }
+        checkedConnection = connection
+        checkedAssistants = result
+      }
+    #endif
     .sheet(item: $action) { which in
       switch which {
       case .workspace: WorkspaceChooser(model: model)
       case .signature: SignatureEditor(model: model)
       case .assistant:
         #if os(macOS)
-          AssistantSetupView(model: model)
+          AssistantSetupView(model: model, configured: assistants)
         #else
           EmptyView()
         #endif

@@ -3,6 +3,20 @@
   import RelayCore
   import SwiftUI
 
+  extension WorkspaceModel {
+    var assistantConnection: AssistantConnection {
+      let relay = (Bundle.main.executableURL ?? Bundle.main.bundleURL).deletingLastPathComponent()
+        .appendingPathComponent("relay")
+      if let server = serverAddress {
+        return AssistantConnection(
+          relay: relay, server: server, keychain: usesSavedToken,
+          actor: currentActor)
+      }
+      return AssistantConnection(relay: relay, folder: root, actor: currentActor)
+    }
+
+  }
+
   struct AssistantSetupView: View {
     @ObservedObject var model: WorkspaceModel
     @Environment(\.dismiss) private var dismiss
@@ -13,16 +27,9 @@
     @State private var manual = false
     @State private var copied = false
 
-    private var connection: AssistantConnection {
-      let relay = (Bundle.main.executableURL ?? Bundle.main.bundleURL).deletingLastPathComponent()
-        .appendingPathComponent("relay")
-      if let server = model.serverAddress {
-        return AssistantConnection(
-          relay: relay, server: server, keychain: model.usesSavedToken,
-          actor: model.currentActor)
-      }
-      return AssistantConnection(relay: relay, folder: model.root, actor: model.currentActor)
-    }
+    let configured: [LocalAssistant]
+
+    private var connection: AssistantConnection { model.assistantConnection }
 
     var body: some View {
       SettingsSheet(title: "连接工作助手") {
@@ -73,6 +80,7 @@
         }
       }
       .interactiveDismissDisabled(busy)
+      .onAppear { clearFeedback() }
       .onChange(of: client) { _, _ in clearFeedback() }
       .onChange(of: connection) { _, _ in clearFeedback() }
     }
@@ -80,7 +88,7 @@
     private func clearFeedback() {
       error = nil
       copied = false
-      registered = nil
+      registered = configured.contains(client) ? .alreadyAdded : nil
       manual = false
     }
 
