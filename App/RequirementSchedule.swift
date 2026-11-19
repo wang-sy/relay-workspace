@@ -3,7 +3,7 @@ import SwiftUI
 
 struct RequirementSchedule: View {
   @Environment(\.dynamicTypeSize) private var typeSize
-  @State private var offset = 0
+  @Binding var offset: Int
   let items: [Item]
   let entries: [Entry]
   let width: CGFloat
@@ -61,6 +61,16 @@ struct RequirementSchedule: View {
       Hairline()
       if weekItems.isEmpty {
         QuietMessage(symbol: "calendar", text: "这一周没有排定的需求")
+        if let nearest = items.compactMap({ item -> Date? in
+          guard let from = item.start, let to = item.end else { return nil }
+          return to < start ? to : from
+        }).min(by: { abs($0.timeIntervalSince(start)) < abs($1.timeIntervalSince(start)) }),
+          let week = calendar.dateInterval(of: .weekOfYear, for: nearest)?.start
+        {
+          Button("查看最近的排期") {
+            offset = (calendar.dateComponents([.day], from: currentWeek, to: week).day ?? 0) / 7
+          }
+        }
       }
       ForEach(weekItems) { item in
         let marks = milestones[item.id] ?? []
@@ -134,7 +144,8 @@ struct RequirementSchedule: View {
         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
       let dates = [item.start, item.end].compactMap { $0 }.map(RelayDate.short).joined(
         separator: " – ")
-      Text([item.status, dates].filter { !$0.isEmpty }.joined(separator: " · "))
+      let members = item.members.map(\.name).joined(separator: "、")
+      Text([dates, members, item.status].filter { !$0.isEmpty }.joined(separator: " · "))
         .font(.caption).foregroundStyle(RelayPalette.secondary)
     }.padding(.vertical, 2)
   }

@@ -46,24 +46,17 @@ extension WorkOperation {
   }
 }
 
-private enum Page: String, Identifiable {
-  case overview = "团队概览"
+private enum Page: String, CaseIterable, Identifiable {
   case directions = "方向与需求"
   case ideas = "探索池"
-  case mine = "与我有关"
-  case reminders = "提醒"
-  case settings = "工作空间"
   var id: Self { self }
-  var icon: String {
-    switch self {
-    case .overview: return "square.grid.2x2"
-    case .directions: return "flag"
-    case .ideas: return "lightbulb"
-    case .mine: return "person"
-    case .reminders: return "bell"
-    case .settings: return "slider.horizontal.3"
-    }
-  }
+  var icon: String { self == .directions ? "flag" : "lightbulb" }
+}
+
+private enum WorkspaceTool: String, Identifiable {
+  case settings = "工作空间"
+  case reminders = "提醒"
+  var id: Self { self }
 }
 
 struct ItemLink: View {
@@ -109,51 +102,74 @@ struct EditTarget: Identifiable {
 }
 
 struct WorkspaceView: View {
-  @EnvironmentObject var model: WorkspaceModel
-  @Environment(\.scenePhase) var phase
-  @State private var selection: Page? = {
+  @EnvironmentObject private var model: WorkspaceModel
+  @Environment(\.scenePhase) private var phase
+  #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+  #endif
+  @State private var selection = Page.directions
+  @State private var directionPath: [String] = []
+  @State private var ideaPath: [String] = []
+  @State private var onlyMine = false
+  @State private var edit: EditTarget?
+  @State private var tool: WorkspaceTool? = {
     #if os(iOS) && targetEnvironment(simulator) && DEBUG
       if ProcessInfo.processInfo.arguments.contains("--preview-workspace") { return .settings }
     #endif
-    return .overview
+    return nil
   }()
-  @State private var path = NavigationPath()
-  @State private var compact: NavigationSplitViewColumn = .detail
-  @State private var edit: EditTarget?
-  @State private var showingSchedule = false
 
   var body: some View {
-    NavigationSplitView(preferredCompactColumn: $compact) {
-      sidebar
-    } detail: {
-      NavigationStack(path: $path) {
-        connectedPage.navigationTitle((selection ?? .overview).rawValue)
-          #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
-          #endif
-          .navigationDestination(for: String.self) { id in
-            if let item = model.state.items[id] {
-              ItemDetails(item: item, edit: { edit = $0 })
-            } else {
-              ContentUnavailableView("暂无事项", systemImage: "questionmark.folder")
+    Group {
+      #if os(iOS)
+        if sizeClass == .compact {
+          TabView(selection: $selection) {
+            ForEach(Page.allCases) { page in
+              screen(page)
+                .tabItem { Label(page.rawValue, systemImage: page.icon) }
+                .tag(page)
             }
           }
-          .toolbar {
-            if selection != .settings && path.isEmpty
-              && (model.serverAddress == nil || model.hasSnapshot)
-            {
-              Button {
-                edit = EditTarget(nil, .create, selection == .ideas ? .idea : .direction)
-              } label: {
-                Label("新建事项", systemImage: "plus")
-              }.help("新建事项")
-            }
-          }
-      }
+        } else {
+          splitView
+        }
+      #else
+        splitView
+      #endif
     }
     .tint(RelayPalette.accent)
-    .onChange(of: selection) { _, _ in path = NavigationPath() }
     .sheet(item: $edit) { Editor(target: $0).environmentObject(model) }
+    .sheet(item: $tool) { utility in
+      NavigationStack {
+        Group {
+          switch utility {
+          case .settings:
+            WorkspaceSettings {
+              directionPath = []
+              selection = .directions
+              tool = nil
+            }
+          case .reminders: reminders
+          }
+        }
+        .navigationTitle(utility.rawValue)
+        #if os(iOS)
+          .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("完成") { tool = nil }.keyboardShortcut(.cancelAction)
+          }
+        }
+      }
+      #if os(macOS)
+        .frame(minWidth: 480, idealWidth: 700, minHeight: 400, idealHeight: 510)
+      #endif
+    }
+    .onChange(of: model.serverAddress ?? model.root.path) { _, _ in
+      directionPath = []
+      ideaPath = []
+    }
     .task(id: phase) {
       guard phase == .active else { return }
       await model.start()
@@ -172,8 +188,71 @@ struct WorkspaceView: View {
     }
   }
 
-  @ViewBuilder private var connectedPage: some View {
-    if selection != .settings && !model.hasSnapshot {
+  private var splitView: some View {
+    NavigationSplitView {
+      sidebar
+    } detail: {
+      screen(selection).id(selection)
+    }
+  }
+
+  private func screen(_ page: Page) -> some View {
+    let path = page == .directions ? $directionPath : $ideaPath
+    return NavigationStack(path: path) {
+      connectedPage(page)
+        .navigationTitle(page.rawValue)
+        #if os(iOS)
+          .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .navigationDestination(for: String.self) { id in
+          if let item = model.state.items[id] {
+            ItemDetails(item: item, edit: { edit = $0 })
+          } else {
+            ContentUnavailableView("暂无事项", systemImage: "questionmark.folder")
+          }
+        }
+        .toolbar {
+          if path.wrappedValue.isEmpty {
+            #if os(iOS)
+              if sizeClass == .compact {
+                ToolbarItem(placement: .topBarLeading) {
+                  Menu {
+                    workspaceActions
+                  } label: {
+                    Label("工作空间菜单", systemImage: "person.crop.circle")
+                  }
+                }
+              }
+            #endif
+            if model.hasSnapshot {
+              ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                  Picker("显示范围", selection: $onlyMine) {
+                    Text("全部事项").tag(false)
+                    Text("与我有关").tag(true)
+                  }
+                } label: {
+                  Label(
+                    onlyMine ? "与我有关" : "筛选",
+                    systemImage: onlyMine
+                      ? "line.3.horizontal.decrease.circle.fill"
+                      : "line.3.horizontal.decrease.circle")
+                }
+                .help(onlyMine ? "正在显示与我有关的事项" : "筛选与我有关的事项")
+                Button {
+                  edit = EditTarget(nil, .create, page == .ideas ? .idea : .direction)
+                } label: {
+                  Label(page == .ideas ? "新建探索" : "新建事项", systemImage: "plus")
+                }.help(page == .ideas ? "新建探索" : "新建事项")
+              }
+            }
+          }
+        }
+    }
+  }
+
+  @ViewBuilder private func connectedPage(_ page: Page) -> some View {
+    if !model.hasSnapshot {
       if let issue = model.sourceIssue {
         ContentUnavailableView {
           Label(
@@ -182,19 +261,26 @@ struct WorkspaceView: View {
         } description: {
           Text(issue)
         } actions: {
-          Button("工作空间设置") { selection = .settings }
+          Button("工作空间设置") { tool = .settings }
           Button("重试") { Task { await model.retry() } }
         }
       } else {
         ProgressView("正在打开工作空间…").frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     } else {
-      pageBody.safeAreaInset(edge: .top, spacing: 0) {
-        if selection != .settings, model.sourceIssue != nil {
+      let ids = onlyMine ? model.state.itemIDs(relatedTo: model.currentActor) : nil
+      Group {
+        switch page {
+        case .directions: RequirementsView(state: model.state, scope: ids)
+        case .ideas: ideas(scope: ids)
+        }
+      }
+      .safeAreaInset(edge: .top, spacing: 0) {
+        if model.sourceIssue != nil {
           HStack {
             Label("连接已中断，正在显示上次同步的记录", systemImage: "wifi.slash")
             Spacer()
-            Button("连接设置") { selection = .settings }
+            Button("连接设置") { tool = .settings }
           }.font(.callout).padding(8).background(.regularMaterial)
         }
       }
@@ -219,153 +305,126 @@ struct WorkspaceView: View {
             RelayPalette.primary)
         }.padding(.horizontal, 17).padding(.top, 10).padding(.bottom, 12)
       #endif
-      List(selection: $selection) {
-        Section("团队") { ForEach([Page.overview, .directions, .ideas]) { sidebarLink($0) } }
-        Section("个人") { ForEach([Page.mine, .reminders]) { sidebarLink($0) } }
-        Section { sidebarLink(.settings) }
-      }.listStyle(.sidebar)
-      HStack(spacing: 9) {
-        MemberMark(name: model.currentActor, size: 30)
-        VStack(alignment: .leading, spacing: 2) {
-          Text(model.currentActor.isEmpty ? "未署名" : model.currentActor)
-            .font(.subheadline.weight(.semibold)).lineLimit(1)
-          Text(model.workspaceLabel)
-            .font(.caption).foregroundStyle(RelayPalette.secondary).lineLimit(1)
+      List(
+        selection: Binding<Page?>(
+          get: { selection }, set: { if let page = $0 { selection = page } })
+      ) {
+        ForEach(Page.allCases) { page in
+          NavigationLink(value: page) {
+            Label(page.rawValue, systemImage: page.icon).padding(.vertical, 4)
+          }
         }
-      }.frame(maxWidth: .infinity, alignment: .leading).padding(14)
-        .overlay(alignment: .top) { Hairline() }
+      }.listStyle(.sidebar)
+      Hairline()
+      Menu {
+        workspaceActions
+      } label: {
+        HStack(spacing: 9) {
+          MemberMark(name: model.currentActor, size: 30)
+          VStack(alignment: .leading, spacing: 2) {
+            Text(model.currentActor.isEmpty ? "未署名" : model.currentActor)
+              .font(.subheadline.weight(.semibold)).lineLimit(1)
+            Text("工作空间").font(.caption).foregroundStyle(RelayPalette.secondary)
+          }
+          Spacer(minLength: 4)
+          Image(systemName: "chevron.up.chevron.down").font(.caption).foregroundStyle(
+            RelayPalette.secondary)
+        }.contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .menuIndicator(.hidden)
+      .accessibilityLabel("工作空间菜单")
+      .help("工作空间设置与提醒")
+      .padding(14)
     }
     .navigationTitle("Relay")
     .navigationSplitViewColumnWidth(min: 174, ideal: 195, max: 240)
   }
 
-  private func sidebarLink(_ page: Page) -> some View {
-    NavigationLink(value: page) {
-      Label(page.rawValue, systemImage: page.icon).padding(.vertical, 3)
+  @ViewBuilder private var workspaceActions: some View {
+    Button {
+      tool = .settings
+    } label: {
+      Label("工作空间设置…", systemImage: "gearshape")
+    }
+    Button {
+      tool = .reminders
+    } label: {
+      Label("提醒…", systemImage: "bell")
     }
   }
 
-  private var all: [Item] {
-    model.state.items.values.sorted {
-      $0.title.localizedStandardCompare($1.title) == .orderedAscending
+  private func ideas(scope: Set<String>?) -> some View {
+    let items = model.state.items.values.filter {
+      $0.kind == .idea && (scope?.contains($0.id) ?? true)
+    }
+    .sorted { ($0.title, $0.id) < ($1.title, $1.id) }
+    let grouped = Dictionary(grouping: items) {
+      $0.category.flatMap { $0.isEmpty ? nil : $0 } ?? "待分类"
+    }
+    return RelayPage { _ in
+      if items.isEmpty {
+        ContentUnavailableView(scope == nil ? "还没有探索" : "没有与你相关的探索", systemImage: "lightbulb")
+      }
+      ForEach(grouped.keys.sorted(), id: \.self) { category in
+        RelayPanel(spacing: 4) {
+          PanelTitle(category).padding(.bottom, 3)
+          ForEach(grouped[category] ?? []) { item in
+            if item.id != grouped[category]?.first?.id { Hairline() }
+            ItemLink(
+              item: item, subtitle: model.state.history(item.id).last?.change.note ?? item.next)
+          }
+        }
+      }
     }
   }
 
-  @ViewBuilder private var pageBody: some View {
-    switch selection ?? .overview {
-    case .overview: Overview(state: model.state)
-    case .directions:
-      let directions = all.filter { $0.kind == .direction }
-      RelayPage { width in
-        DisclosureGroup("需求排期", isExpanded: $showingSchedule) {
-          let scheduled = all.filter { $0.kind == .requirement }.sorted {
-            ($0.start ?? .distantFuture, $0.id) < ($1.start ?? .distantFuture, $1.id)
-          }
-          RequirementSchedule(
-            items: scheduled, entries: model.state.entries, width: width - 20, today: .now)
+  private func openItem(_ item: Item) {
+    selection = item.kind == .idea ? .ideas : .directions
+    if selection == .ideas { ideaPath = [item.id] } else { directionPath = [item.id] }
+    tool = nil
+  }
+
+  private var reminders: some View {
+    let reminders = Array(
+      model.state.entries.filter { $0.change.operation == .remind }.reversed())
+    return RelayPage { _ in
+      RelayPanel {
+        PanelTitle("本机通知")
+        Text(model.notificationStatus.text).foregroundStyle(RelayPalette.secondary)
+        if let issue = model.notificationRequestError, issue != model.notificationStatus.text {
+          Text(issue).font(.callout).foregroundStyle(RelayPalette.amber)
         }
-        if directions.isEmpty { empty("flag", "尚未记录方向") }
-        ForEach(directions) { direction in
-          let requirements = model.state.children(of: direction.id).filter {
-            $0.kind == .requirement
-          }
-          RelayPanel(spacing: 5) {
-            ItemLink(item: direction, subtitle: direction.next)
-            Hairline()
-            if requirements.isEmpty {
-              QuietMessage(symbol: "calendar", text: "这个方向还没有排定的需求")
-            }
-            ForEach(requirements) { item in ItemLink(item: item).padding(.leading, 12) }
-          }
+        if model.notificationStatus == .needsPermission {
+          Button("允许本地通知") { Task { await model.authorizeNotifications() } }
         }
       }
-    case .ideas:
-      let ideas = all.filter { $0.kind == .idea }
-      let grouped = Dictionary(grouping: ideas) {
-        $0.category.flatMap { $0.isEmpty ? nil : $0 } ?? "待分类"
-      }
-      RelayPage { _ in
-        if ideas.isEmpty { empty("lightbulb", "探索池里还没有想法") }
-        ForEach(grouped.keys.sorted(), id: \.self) { category in
-          RelayPanel(spacing: 4) {
-            PanelTitle(category).padding(.bottom, 3)
-            ForEach(grouped[category] ?? []) { item in
-              if item.id != grouped[category]?.first?.id { Hairline() }
-              ItemLink(
-                item: item, subtitle: model.state.history(item.id).last?.change.note ?? item.next)
-            }
-          }
+      RelayPanel(spacing: 7) {
+        PanelTitle("团队的回看约定")
+        if reminders.isEmpty {
+          QuietMessage(symbol: "bell", text: "还没有回看约定。可以在事项详情约定时间，也可以让 Agent 添加。")
         }
-      }
-    case .mine:
-      let handoffs = model.state.entries.filter {
-        $0.change.operation == .handoff && $0.change.recipient == model.currentActor
-          && !model.state.resolved($0.id)
-      }
-      let active = all.filter {
-        !$0.closed && $0.members.contains(where: { $0.name == model.currentActor })
-      }
-      RelayPage { _ in
-        RelayPanel(spacing: 5) {
-          PanelTitle("等我回应")
-          if handoffs.isEmpty { QuietMessage(symbol: "tray", text: "没有等你回应的交付") }
-          ForEach(handoffs) { e in
-            if let item = model.state.items[e.change.itemID] {
-              ItemLink(item: item, subtitle: e.actor + " · " + (e.change.note ?? "交付"))
-            }
-          }
-        }
-        RelayPanel(spacing: 5) {
-          PanelTitle("我参与的工作")
-          if active.isEmpty { QuietMessage(symbol: "person", text: "当前没有署名参与的事项") }
-          ForEach(active) { ItemLink(item: $0) }
-        }
-      }
-    case .reminders:
-      let reminders = Array(
-        model.state.entries.filter { $0.change.operation == .remind }.reversed())
-      RelayPage { _ in
-        RelayPanel {
-          PanelTitle("本机通知")
-          Text(model.notificationStatus.text).foregroundStyle(RelayPalette.secondary)
-          if let issue = model.notificationRequestError, issue != model.notificationStatus.text {
-            Text(issue).font(.callout).foregroundStyle(RelayPalette.amber)
-          }
-          if model.notificationStatus == .needsPermission {
-            Button("允许本地通知") { Task { await model.authorizeNotifications() } }
-          }
-        }
-        RelayPanel(spacing: 7) {
-          PanelTitle("团队的回看约定")
-          if reminders.isEmpty {
-            QuietMessage(symbol: "bell", text: "还没有回看约定。可以在事项详情约定时间，也可以让 Agent 添加。")
-          }
-          ForEach(reminders) { entry in
-            if let item = model.state.items[entry.change.itemID] {
-              let condition =
-                model.state.reminderIsCurrent(entry)
-                ? (entry.change.reference == nil ? "到点通知" : "仍暂停时通知") : "条件已解除"
-              NavigationLink(value: item.id) {
-                VStack(alignment: .leading, spacing: 4) {
-                  Text(entry.change.note ?? item.title).font(.headline)
-                  Text(
-                    [entry.change.recipient, entry.change.due?.formatted(), condition].compactMap {
-                      $0
-                    }.joined(separator: " · ")
-                  )
-                  .font(.subheadline).foregroundStyle(RelayPalette.secondary)
-                }.padding(.vertical, 5)
-              }.buttonStyle(RelayRowStyle())
-            }
+        ForEach(reminders) { entry in
+          if let item = model.state.items[entry.change.itemID] {
+            let condition =
+              model.state.reminderIsCurrent(entry)
+              ? (entry.change.reference == nil ? "到点通知" : "仍暂停时通知") : "条件已解除"
+            Button {
+              openItem(item)
+            } label: {
+              VStack(alignment: .leading, spacing: 4) {
+                Text(entry.change.note ?? item.title).font(.headline)
+                Text(
+                  [entry.change.recipient, entry.change.due?.formatted(), condition].compactMap {
+                    $0
+                  }.joined(separator: " · ")
+                )
+                .font(.subheadline).foregroundStyle(RelayPalette.secondary)
+              }.padding(.vertical, 5)
+            }.buttonStyle(RelayRowStyle())
           }
         }
       }
-    case .settings: WorkspaceSettings { selection = .overview }
     }
   }
-
-  private func empty(_ icon: String, _ text: String) -> some View {
-    RelayPanel { QuietMessage(symbol: icon, text: text) }
-  }
-
 }

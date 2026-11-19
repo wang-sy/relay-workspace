@@ -41,6 +41,27 @@ extension Workspace {
     }
   }
 
+  /// Items a member owns or is being asked to act on, plus their requirement and direction.
+  public func itemIDs(relatedTo member: String) -> Set<String> {
+    guard !member.isEmpty else { return [] }
+    let index = RequirementIndex(self)
+    var ids = Set<String>()
+    for item in items.values {
+      guard
+        item.members.contains(where: { $0.name == member })
+          || index.pending(for: item).contains(where: { $0.change.recipient == member })
+      else { continue }
+      ids.insert(item.id)
+      if item.kind == .requirement || item.kind == .task,
+        let parent = item.parentID.flatMap({ items[$0] })
+      {
+        ids.insert(parent.id)
+        if item.kind == .task, let directionID = parent.parentID { ids.insert(directionID) }
+      }
+    }
+    return ids
+  }
+
   /// Used by a requirement's drill-down as well as the board, including same-day handoffs.
   public func outstandingWork(for item: Item) -> [Entry] {
     RequirementIndex(self).pending(for: item)

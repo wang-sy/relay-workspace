@@ -40,6 +40,10 @@ while read -r device family; do
     xcrun simctl spawn "$device" launchctl list > "$out/$family-processes.txt"
     awk '$1 ~ /^[0-9]+$/ && /io.github.wang-sy.RelayWorkspace/ {seen=1} END {exit !seen}' "$out/$family-processes.txt"
     xcrun simctl io "$device" screenshot "$out/$family.png"
+    for layout in gantt cards; do
+        launch_and_wait "$device" "$family" -relay.requirements.layout "$layout"
+        xcrun simctl io "$device" screenshot "$out/$family-$layout.png"
+    done
     launch_and_wait "$device" "$family" --preview-workspace
     xcrun simctl io "$device" screenshot "$out/$family-workspace.png"
     xcrun simctl shutdown "$device"

@@ -93,7 +93,7 @@ struct WorkspaceSettings: View {
               Text(sourceDetail).font(.callout).foregroundStyle(RelayPalette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
               if model.hasSnapshot {
-                Button("查看团队概览", action: showBoard).buttonStyle(.borderedProminent)
+                Button("查看方向与需求", action: showBoard).buttonStyle(.borderedProminent)
                   #if os(iOS)
                     .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
                   #endif

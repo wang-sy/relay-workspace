@@ -74,6 +74,31 @@ final class RequirementBoardTests: XCTestCase {
     XCTAssertEqual(state.outstandingWork(for: try XCTUnwrap(state.items["t"])).count, 1)
   }
 
+  func testPersonalScopeKeepsParentsAndDropsAnsweredRequests() throws {
+    var state = Workspace()
+    var idea = create("idea", .idea)
+    idea.members = [Member("River", "调研")]
+    for change in [
+      create("d", .direction), create("r", .requirement, "d"),
+      create("other", .requirement, "d"), create("t", .task, "r"), idea,
+    ] {
+      try apply(&state, change)
+    }
+    var handoff = Change(.handoff, "t")
+    handoff.affectsRequirement = false
+    handoff.recipient = "River"
+    handoff.note = "请确认样例"
+    let request = try apply(&state, handoff)
+    XCTAssertEqual(state.itemIDs(relatedTo: "River"), ["d", "r", "t", "idea"])
+    XCTAssertEqual(state.itemIDs(relatedTo: "owner"), ["d", "r", "other"])
+    XCTAssertTrue(state.itemIDs(relatedTo: "").isEmpty)
+    var reply = Change(.acknowledge, "t")
+    reply.reference = request
+    reply.note = "已确认"
+    try apply(&state, reply)
+    XCTAssertEqual(state.itemIDs(relatedTo: "River"), ["idea"])
+  }
+
   func testCloseUsesLocalCalendarDayAndRealOutcomeAndCanReopen() throws {
     var state = Workspace()
     try apply(&state, create("d", .direction))
