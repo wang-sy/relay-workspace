@@ -51,7 +51,7 @@ struct ItemContextView: View {
                   }
                 } label: {
                   Label(
-                    [highlight.sourceTitle, highlight.time.map(RelayDate.long)].compactMap { $0 }
+                    [highlight.sourceTitle, highlight.time.map(contextDate)].compactMap { $0 }
                       .joined(separator: " · "), systemImage: "link"
                   )
                   .font(.caption)
@@ -132,8 +132,9 @@ private struct ContextCollection: View {
             VStack(alignment: .leading, spacing: 4) {
               Label(ref.material.title, systemImage: symbol(ref.material.kind)).font(.headline)
               Text(
-                [ref.purpose, ref.locator, "v\(ref.revision)"].compactMap { $0 }.joined(
-                  separator: " · ")
+                [ref.purpose, ref.locator == ref.purpose ? nil : ref.locator, "v\(ref.revision)"]
+                  .compactMap { $0 }.joined(
+                    separator: " · ")
               ).font(.caption)
               if let note = ref.note { Text(note).font(.callout).lineLimit(2) }
             }.padding(.vertical, 4)
@@ -147,7 +148,7 @@ private struct ContextCollection: View {
             VStack(alignment: .leading, spacing: 4) {
               Text(e.kind == "event" ? model.state.label(.event, e.title) : e.title).font(.headline)
               if let value = e.text { Text(value).font(.callout).lineLimit(2) }
-              Text(e.actor + " · " + RelayDate.long(e.time)).font(.caption).foregroundStyle(
+              Text(e.actor + " · " + contextDate(e.time)).font(.caption).foregroundStyle(
                 .secondary)
             }.padding(.vertical, 4)
           }
@@ -197,6 +198,10 @@ private struct ContextCollection: View {
   }
 }
 
+private func contextDate(_ date: Date) -> String {
+  date.formatted(.dateTime.year().month().day().hour().minute().locale(Locale(identifier: "zh_CN")))
+}
+
 private func symbol(_ kind: String) -> String {
   switch kind {
   case "note": return "text.alignleft"
@@ -223,13 +228,13 @@ private struct ReferenceView: View {
           Label(ref.material.title, systemImage: symbol(ref.material.kind)).font(.title3.bold())
           Text(
             [
-              ref.purpose, ref.locator, "引用 v\(ref.revision)",
+              ref.purpose, ref.locator == ref.purpose ? nil : ref.locator, "引用 v\(ref.revision)",
               ref.latestRevision > ref.revision ? "最新 v\(ref.latestRevision)" : nil,
               ref.material.sourceVersion.map { "来源版本 " + $0 },
             ].compactMap { $0 }.joined(separator: " · ")
           ).font(.caption).foregroundStyle(.secondary)
           if let note = ref.note { Text(note).textSelection(.enabled) }
-          Text([ref.actor, ref.source, RelayDate.long(ref.time)].joined(separator: " · ")).font(
+          Text([ref.actor, ref.source, contextDate(ref.time)].joined(separator: " · ")).font(
             .caption
           ).foregroundStyle(.secondary)
           if let newer = ref.latestReferenceID {
@@ -333,7 +338,7 @@ private struct WorkEventView: View {
       }) {
         RelayPanel {
           PanelTitle(model.state.label(.event, event.change.operation.rawValue))
-          Text(event.actor + " · " + RelayDate.long(event.time)).font(.caption)
+          Text(event.actor + " · " + contextDate(event.time)).font(.caption)
           NavigationLink("查看这次记录的依据", value: ContextDestination.eventLibrary(itemID, id))
           if let note = event.change.note { Text(note).textSelection(.enabled) }
           if let title = event.change.title { Text(title) }

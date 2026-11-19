@@ -21,7 +21,9 @@ function terms(query: string) {
       if (!stop.has(pair) && !words.has(pair)) words.set(pair, 1);
     }
   }
-  return [...words].slice(0, 80);
+  const all = [...words];
+  const phrases = all.filter(([term]) => [...term].length > 1);
+  return (phrases.length ? phrases : all).slice(0, 80);
 }
 export function findContexts(db: DatabaseSync, raw: string) {
   const query = normalize(raw),

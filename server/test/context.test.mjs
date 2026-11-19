@@ -23,7 +23,15 @@ test("context citations are pinned, shared across items, atomic on retry and sur
     const e = changes(store, { operation: "create", itemID: "idea", kind: "idea", title: "巡检交接" });
     changes(store, { operation: "create", itemID: "direction", kind: "direction", title: "现场" });
     const first = request({ material: note, eventID: e.id, slot: "decision", note: "先保存在设备上。" });
+    changes(store, {
+      operation: "create",
+      itemID: "other",
+      kind: "idea",
+      title: "构建失败",
+      next: "先判断是否需要投入。",
+    });
     const receipt = store.contexts.attach(first, time);
+    assert.ok(!store.contexts.search("地库断网巡检").some((hit) => hit.itemID === "other"));
     assert.equal(store.contexts.attach(first, time + 1).created, false);
     assert.deepEqual(store.contexts.get(receipt.reference.id).material, note);
     assert.throws(() => store.contexts.attach({ ...first, note: "不同" }), /请求 ID/);
