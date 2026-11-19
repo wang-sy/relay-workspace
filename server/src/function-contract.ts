@@ -1,16 +1,10 @@
 import { CronExpressionParser } from "cron-parser";
 import { z } from "zod";
 import { ApiError, changeSchema, type Entry, type Item } from "./domain.js";
+import { namedTrigger, sourceTrigger, type SourceTrigger } from "./vocabulary.js";
 
 export const functionID = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
-const itemID = z.string().trim().min(1).max(160).optional();
-export const triggerSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("event"), operation: changeSchema.shape.operation,
-    itemID, delaySeconds: z.number().int().min(0).max(366 * 86400).default(0) }),
-  z.strictObject({ kind: z.literal("at"), at: z.iso.datetime({ offset: true }), itemID }),
-  z.strictObject({ kind: z.literal("cron"), expression: z.string().trim().min(1).max(120),
-    timezone: z.string().trim().min(1).max(100), itemID }),
-]);
+export const triggerSchema = z.union([sourceTrigger, namedTrigger]);
 export const definitionSchema = z.strictObject({
   name: z.string().trim().min(1).max(120), trigger: triggerSchema,
   code: z.string().min(1).refine(code => !!code.trim() && Buffer.byteLength(code) <= 32768),
@@ -29,7 +23,7 @@ export type FunctionContext = {
 };
 export const iso = (time: number) => new Date(time).toISOString().replace(/\.\d{3}Z$/, "Z");
 
-export function nextDue(trigger: Trigger, now: number): number | null {
+export function nextDue(trigger: SourceTrigger, now: number): number | null {
   if (trigger.kind === "event") return null;
   if (trigger.kind === "at") return Date.parse(trigger.at);
   try {

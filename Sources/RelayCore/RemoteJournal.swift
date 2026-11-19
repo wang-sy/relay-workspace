@@ -115,6 +115,7 @@ public struct RemoteJournal: Sendable {
 
   public func read(ifNoneMatch tag: String? = nil) async throws -> JournalUpdate {
     var req = request("workspace")
+    req.setValue("open", forHTTPHeaderField: "X-Relay-Types")
     if let tag { req.setValue(tag, forHTTPHeaderField: "If-None-Match") }
     let (data, response) = try await send(req, accepting: tag == nil ? [200] : [200, 304])
     let etag = response.value(forHTTPHeaderField: "ETag")

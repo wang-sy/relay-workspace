@@ -17,16 +17,18 @@ struct ItemDetails: View {
       VStack(alignment: .leading, spacing: 8) {
         if let parentID = item.parentID, let parent = state.items[parentID] {
           NavigationLink(value: parentID) {
-            Label(parent.title, systemImage: parent.kind.icon)
+            Label(parent.title, systemImage: parent.behavior.icon)
               .font(.subheadline).foregroundStyle(RelayPalette.accent)
           }.buttonStyle(.plain)
         }
         Text(item.title).font(.largeTitle.weight(.semibold)).accessibilityAddTraits(.isHeader)
         HStack(spacing: 7) {
-          Text(item.kind.label).font(.subheadline).foregroundStyle(RelayPalette.secondary)
-          StatusLabel(text: item.displayStatus, tone: item.kind.tone)
+          Text(state.label(.item, item.kind.rawValue)).font(.subheadline).foregroundStyle(
+            RelayPalette.secondary)
+          StatusLabel(text: state.status(of: item), tone: item.behavior.tone)
           if let category = item.category, !category.isEmpty {
-            Text(category).font(.subheadline).foregroundStyle(RelayPalette.secondary)
+            Text(state.label(.category, category)).font(.subheadline).foregroundStyle(
+              RelayPalette.secondary)
           }
         }
       }
@@ -47,7 +49,7 @@ struct ItemDetails: View {
               VStack(alignment: .leading, spacing: 6) {
                 if source.id != item.id {
                   NavigationLink(value: source.id) {
-                    Label(source.title, systemImage: source.kind.icon)
+                    Label(source.title, systemImage: source.behavior.icon)
                   }.buttonStyle(.plain).foregroundStyle(RelayPalette.accent)
                 }
                 let who = entry.change.recipient.map { $0 == "*" ? "全体成员" : $0 }
@@ -87,16 +89,18 @@ struct ItemDetails: View {
         historyAndChildren(state: state, events: events)
       }
     }
-    .navigationTitle(item.kind.label + "详情")
+    .navigationTitle(state.label(.item, item.kind.rawValue) + "详情")
     .toolbar {
       Menu {
         Button("披露进展") { edit(EditTarget(item, .update)) }
         Button("约定回看") { edit(EditTarget(item, .remind)) }
-        if item.kind == .idea { Button("纳入需求排期") { edit(EditTarget(item, .promote)) } }
-        if item.kind == .direction {
+        if item.behavior == .idea { Button("纳入需求排期") { edit(EditTarget(item, .promote)) } }
+        if item.behavior == .direction {
           Button("新增需求") { edit(EditTarget(item, .create, .requirement)) }
         }
-        if item.kind == .requirement { Button("拆出任务") { edit(EditTarget(item, .create, .task)) } }
+        if item.behavior == .requirement {
+          Button("拆出任务") { edit(EditTarget(item, .create, .task)) }
+        }
       } label: {
         Label("事项操作", systemImage: "ellipsis.circle")
       }
@@ -151,12 +155,15 @@ struct ItemDetails: View {
               MemberMark(name: member.name, size: 25)
               Text(member.name).font(.subheadline.weight(.semibold))
               if !member.role.isEmpty {
-                Text(member.role).font(.subheadline).foregroundStyle(RelayPalette.secondary)
+                Text(model.state.label(.role, member.role)).font(.subheadline).foregroundStyle(
+                  RelayPalette.secondary)
               }
             }
           }
         }
       }
+      properties(
+        item.fields, hints: model.state.typeRecord(.item, item.kind.rawValue)?.definition.fields)
       VStack(alignment: .leading, spacing: 4) {
         Text("事项 ID").font(.caption.weight(.medium)).foregroundStyle(RelayPalette.muted)
         Text(item.id).font(.caption.monospaced()).foregroundStyle(RelayPalette.secondary)
@@ -169,6 +176,18 @@ struct ItemDetails: View {
     VStack(alignment: .leading, spacing: 4) {
       Text(label).font(.caption.weight(.medium)).foregroundStyle(RelayPalette.muted)
       Text(value).font(.callout)
+    }
+  }
+
+  @ViewBuilder private func properties(_ fields: [String: JSONValue]?, hints: [String: FieldHint]?)
+    -> some View
+  {
+    if let fields {
+      ForEach(fields.keys.sorted(), id: \.self) { key in
+        if let value = fields[key] {
+          fact(hints?[key]?.label ?? key, value: value.display).textSelection(.enabled)
+        }
+      }
     }
   }
 
@@ -215,13 +234,17 @@ struct ItemDetails: View {
             VStack(alignment: .leading, spacing: 4) {
               HStack(spacing: 5) {
                 Text(e.actor).font(.subheadline.weight(.semibold))
-                Text(e.change.operation.label).font(.subheadline).foregroundStyle(
-                  RelayPalette.secondary)
+                Text(state.label(.event, e.change.operation.rawValue)).font(.subheadline)
+                  .foregroundStyle(
+                    RelayPalette.secondary)
                 if let recipient = e.change.recipient {
                   Text("→ \(recipient)").font(.subheadline.weight(.semibold))
                 }
               }
               if let note = e.change.note { Text(note).font(.callout) }
+              properties(
+                e.change.payload,
+                hints: state.typeRecord(.event, e.change.operation.rawValue)?.definition.fields)
               Text(
                 [e.time.formatted(date: .abbreviated, time: .shortened), e.source, e.session]
                   .compactMap { $0 }.joined(separator: " · ")

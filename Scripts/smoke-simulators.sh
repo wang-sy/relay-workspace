@@ -45,6 +45,8 @@ while read -r device family; do
         launch_and_wait "$device" "$family" -relay.requirements.layout "$layout"
         xcrun simctl io "$device" screenshot "$out/$family-$layout.png"
     done
+    launch_and_wait "$device" "$family" --preview-explorations
+    xcrun simctl io "$device" screenshot "$out/$family-explorations.png"
     launch_and_wait "$device" "$family" --preview-workspace
     xcrun simctl io "$device" screenshot "$out/$family-workspace.png"
     launch_and_wait "$device" "$family" --preview-hosted-functions

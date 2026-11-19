@@ -101,7 +101,7 @@ public struct Journal: Sendable {
         return old
       }
       var (workspace, sequence) = try load(at: dir)
-      if canonical.operation == .close, workspace.items[canonical.itemID]?.kind == .requirement,
+      if canonical.operation == .close, workspace.items[canonical.itemID]?.behavior == .requirement,
         (canonical.note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       {
         throw RelayError("请写清楚这个需求完成了什么")

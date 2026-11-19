@@ -102,6 +102,38 @@ def exercise_board(cmd, env):
     assert finished["phase"] == "completedToday" and finished["summary"] == "Import retry shipped"
 
 
+def exercise_types(cmd, env):
+    fixture = server_entry.parents[2] / "Examples/experiment.jsonl"
+    writes = [json.loads(line) for line in fixture.read_text().splitlines()]
+    calls = [{"method": "initialize", "params": {}}]
+    for write in writes:
+        calls.append({"method": "tools/call", "params": {"name": "relay_apply", "arguments": write}})
+    calls.append({"method": "tools/call", "params": {"name": "relay_read", "arguments": {"scope": "types"}}})
+    frames = "".join(json.dumps(dict(jsonrpc="2.0", id=i, **call)) + "\n" for i, call in enumerate(calls))
+    result = subprocess.run(cmd + ["mcp"], env=env, input=frames, text=True, capture_output=True, check=True, timeout=20)
+    replies = [json.loads(line)["result"] for line in result.stdout.splitlines()]
+    assert len(replies) == len(calls) and all(not r.get("isError") for r in replies), replies
+    catalog = json.loads(replies[-1]["content"][0]["text"])
+    assert catalog == json.loads(subprocess.check_output(cmd + ["types"], env=env))
+    assert "experiment" in catalog["items"] and "实验复核" in catalog["triggers"]
+    assert "产品 / 用户研究" in catalog["categories"] and "实验设计" in catalog["roles"]
+    assert catalog["eventFields"]["复验通过"] == ["passRate"] and catalog["itemFields"]["experiment"] == ["sampleSize"]
+    def apply(change, valid=True):
+        reply = subprocess.run(cmd + ["apply"], env=env, input=json.dumps({"requestID": str(uuid.uuid4()), "change": change}),
+                               capture_output=True, text=True, timeout=10)
+        assert (reply.returncode == 0) == valid, reply.stderr
+    apply({"operation": "update", "itemID": "EX-first-use", "fields": {"sampleSize": False}}, valid=False)
+    apply({"operation": "复验通过", "itemID": "EX-first-use", "payload": {"passRate": "bad"}}, valid=False)
+    apply({"operation": "复验通过", "itemID": "EX-first-use", "fields": {"sampleSize": None, "notes": ["ok", {"x": True}]}})
+    apply({"operation": "create", "itemID": "other", "kind": "用户访谈", "title": "团队访谈"})
+    apply({"operation": "create", "itemID": "deeper", "kind": "问题", "title": "反馈", "parentID": "other"})
+    apply({"operation": "update", "itemID": "other", "parentID": "deeper"}, valid=False)
+    state = json.loads(subprocess.check_output(cmd + ["read"], env=env))
+    assert not state["conflicts"] and state["items"]["EX-first-use"]["baseKind"] == "idea"
+    assert state["items"]["EX-first-use"]["fields"] == {"notes": ["ok", {"x": True}]}
+    assert "用户访谈" in json.loads(subprocess.check_output(cmd + ["types"], env=env))["items"]
+
+
 def exercise_functions(cmd, env):
     definition = json.loads((server_entry.parents[2] / "Examples/pause-review.json").read_text())
     definition["trigger"]["delaySeconds"] = 1
@@ -155,10 +187,12 @@ with tempfile.TemporaryDirectory() as folder:
             assert len(remote["workspace"]["entries"]) == 1
             exercise_board([binary, "--server", address], env)
             exercise_functions([binary, "--server", address], env)
-        print("Swift CLI and MCP share attributed events and a server-hosted delayed function.")
+            exercise_types([binary, "--server", address], env)
+        print("Swift CLI and MCP share custom types, event payloads, attributed writes and hosted functions.")
     else:
         cmd = [binary, "--workspace", folder]
         env = dict(os.environ, RELAY_ACTOR="test-member")
         exercise(cmd, env)
         exercise_board(cmd, env)
-        print("CLI and MCP read the same idempotent file write.")
+        exercise_types(cmd, env)
+        print("CLI and MCP share custom types and replay idempotent file writes.")

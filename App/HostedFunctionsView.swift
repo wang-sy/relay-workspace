@@ -9,7 +9,7 @@ extension HostedFunction.Trigger {
       if let at, let date = try? Date(at, strategy: .iso8601) { return date.formatted() }
       return at ?? "指定时间"
     case "event":
-      let label = operation.flatMap(WorkOperation.init(rawValue:))?.label ?? operation ?? "事项变化"
+      let label = operation.map { WorkOperation(rawValue: $0).label } ?? "事项变化"
       let seconds = delaySeconds ?? 0
       guard seconds > 0 else { return label + "时" }
       let units = DateComponentsFormatter()
@@ -57,7 +57,8 @@ struct HostedFunctionsView: View {
               } label: {
                 HStack(spacing: 12) {
                   SymbolTile(
-                    symbol: function.trigger.kind == "event" ? "bolt" : "clock",
+                    symbol: (function.resolvedTrigger ?? function.trigger).kind == "event"
+                      ? "bolt" : "clock",
                     tone: RelayPalette.accent)
                   VStack(alignment: .leading, spacing: 4) {
                     Text(function.name).font(.headline)
@@ -117,7 +118,10 @@ private struct HostedFunctionDetail: View {
       RelayPanel {
         PanelTitle(function.name)
         Text(function.trigger.description)
-        if let item = function.trigger.itemID { Text("关联事项 \(item)") }
+        if let source = function.resolvedTrigger {
+          Text(source.description).font(.subheadline).foregroundStyle(RelayPalette.secondary)
+        }
+        if let item = (function.resolvedTrigger ?? function.trigger).itemID { Text("关联事项 \(item)") }
         if let next = function.nextAt { Text("下次执行 \(next.formatted())") }
         Text("发布人 \(function.actor) · 版本 \(function.revision)").font(.subheadline).foregroundStyle(
           RelayPalette.secondary)

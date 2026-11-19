@@ -20,7 +20,8 @@ struct AgentTools {
     case "workspace": return try Wire.encoder().encode(workspace)
     case "board": return try Wire.encoder().encode(workspace.requirementBoard())
     case "gaps": return try Wire.encoder().encode(workspace.gaps())
-    default: throw RelayError("scope must be workspace, board or gaps")
+    case "types": return try Wire.encoder().encode(workspace.typeCatalog())
+    default: throw RelayError("scope must be workspace, board, gaps or types")
     }
   }
 
@@ -78,10 +79,11 @@ struct AgentTools {
 }
 
 let help = """
-  relay [--server URL [--keychain] | --workspace DIRECTORY] read | board | gaps | apply | sample | functions | mcp
+  relay [--server URL [--keychain] | --workspace DIRECTORY] read | board | gaps | types | apply | sample | functions | mcp
 
   board prints the team's requirement list. read and gaps print the workspace or omissions as JSON.
   apply reads one JSON write from stdin. mcp serves tools over stdio.
+  types lists observed vocabulary and versioned templates. Use apply with defineType to publish a template.
   functions list | get ID | deploy < definition.json | enable ID REV | disable ID REV
   Hosted functions run in the service. get includes the JavaScript source and recent executions.
   Default server: http://127.0.0.1:8731. RELAY_SERVER_URL and RELAY_TOKEN configure a service.
@@ -134,7 +136,7 @@ do {
     source: env["RELAY_AGENT"] ?? "Local Agent")
   let data: Data
   switch command {
-  case "read", "board", "gaps":
+  case "read", "board", "gaps", "types":
     data = try await tools.read(command == "read" ? "workspace" : command)
   case "apply": data = try await tools.write(FileHandle.standardInput.readDataToEndOfFile())
   case "functions": data = try await tools.functionCommand(Array(args.dropFirst()))

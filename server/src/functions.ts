@@ -4,19 +4,24 @@ import { isDeepStrictEqual } from "node:util";
 import { ApiError, type Entry, type Item, type Write } from "./domain.js";
 import { iso, nextDue, type Definition, type FunctionContext } from "./function-contract.js";
 import { runCode } from "./function-runtime.js";
+import { builtInTriggers, type TypeRecord, type SourceTrigger } from "./vocabulary.js";
 
 type Row = Record<string, SQLOutputValue>;
 type Journal = {
   transaction<T>(body: () => T): T;
   event(id: string): Entry | undefined;
   item(id: string): Item | undefined;
+  definition(id: string): TypeRecord | undefined;
   append(write: Write, time: string): void;
 };
 type Attempt = { id: string; token: string; code: string; context: FunctionContext; snapshot: string | number;
   itemID: string | null; attempts: number };
 const maxAttempts = 3;
 const inputLimit = 256 * 1024;
-const definitionOf = (row: Row): Definition => JSON.parse(String(row.definition));
+type StoredDefinition = Definition & { resolvedTrigger?: SourceTrigger; triggerRevision?: number };
+const definitionOf = (row: Row): StoredDefinition => JSON.parse(String(row.definition));
+// Built-in triggers were stored directly in older databases.
+const sourceOf = (d: StoredDefinition) => d.resolvedTrigger ?? d.trigger as SourceTrigger;
 
 export class HostedFunctions {
   constructor(private db: DatabaseSync, private journal: Journal) {
@@ -47,10 +52,10 @@ export class HostedFunctions {
   }
 
   private summary(row: Row) {
-    const { name, trigger, enabled } = definitionOf(row);
+    const { name, trigger, enabled, resolvedTrigger, triggerRevision } = definitionOf(row);
     const pending = this.db.prepare("SELECT MIN(scheduled_at) AS due FROM function_runs WHERE function_id=? AND state IN ('queued','running')").get(row.id!);
     const dates = [row.next_due, pending?.due].filter((v): v is number => typeof v === "number");
-    return { id: String(row.id), revision: Number(row.revision), name, trigger, enabled,
+    return { id: String(row.id), revision: Number(row.revision), name, trigger, enabled, resolvedTrigger, triggerRevision,
       actor: String(row.actor), updatedBy: String(row.updated_by), updatedAt: iso(Number(row.updated_at)), nextAt: dates.length ? iso(Math.min(...dates)) : null };
   }
 
@@ -72,7 +77,20 @@ export class HostedFunctions {
   }
 
   deploy(id: string, expected: number, definition: Definition, actor: string, now = Date.now()) {
-    return this.journal.transaction(() => this.save(id, expected, definition, actor, actor, now));
+    return this.journal.transaction(() => {
+      const { trigger } = definition;
+      if (builtInTriggers.includes(trigger.kind)) return this.save(id, expected, definition, actor, actor, now);
+      const old = this.row(id);
+      // A retry after the template changed must still resolve to the original deployment.
+      if (old && Number(old.revision) === expected + 1 && old.updated_by === actor) {
+        const { resolvedTrigger: _source, triggerRevision: _rev, ...submitted } = definitionOf(old);
+        if (isDeepStrictEqual(submitted, definition)) return this.get(id);
+      }
+      const template = this.journal.definition(trigger.kind);
+      const source = template?.source ?? { kind: "event", operation: trigger.kind, delaySeconds: 0 };
+      const resolvedTrigger = trigger.itemID === undefined ? source : { ...source, itemID: trigger.itemID };
+      return this.save(id, expected, { ...definition, resolvedTrigger, triggerRevision: template?.revision ?? 0 }, actor, actor, now);
+    });
   }
 
   setEnabled(id: string, expected: number, enabled: boolean, actor: string, now = Date.now()) {
@@ -83,7 +101,7 @@ export class HostedFunctions {
     });
   }
 
-  private save(id: string, expected: number, definition: Definition, actor: string, changedBy: string, now: number) {
+  private save(id: string, expected: number, definition: StoredDefinition, actor: string, changedBy: string, now: number) {
     const old = this.row(id);
     const revision = Number(old?.revision ?? 0);
     const same = !!old && isDeepStrictEqual(definition, definitionOf(old));
@@ -92,12 +110,12 @@ export class HostedFunctions {
       throw new ApiError(409, "Function revision changed. Read the current definition first.");
     }
     if (same) return this.get(id);
-    const next = nextDue(definition.trigger, now);
+    const trigger = sourceOf(definition);
+    const next = nextDue(trigger, now);
     if (definition.enabled && !old?.enabled) {
       const count = this.db.prepare("SELECT COUNT(*) AS n FROM hosted_functions WHERE enabled=1").get();
       if (Number(count?.n) >= 128) throw new ApiError(409, "This workspace already has 128 enabled functions");
     }
-    const trigger = definition.trigger;
     this.db.prepare(`INSERT INTO hosted_functions(id, revision, definition, actor, updated_by, updated_at, enabled, operation, target, delay_seconds, next_due)
       VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
       revision=excluded.revision, definition=excluded.definition, actor=excluded.actor, updated_by=excluded.updated_by, updated_at=excluded.updated_at,
@@ -147,7 +165,7 @@ export class HostedFunctions {
     return this.journal.transaction(() => {
       const timers = this.db.prepare("SELECT * FROM hosted_functions WHERE enabled=1 AND next_due<=? ORDER BY next_due LIMIT 16").all(now);
       for (const row of timers) {
-        const { trigger } = definitionOf(row);
+        const trigger = sourceOf(definitionOf(row));
         this.enqueue(row, null, trigger.itemID ?? null, Number(row.next_due));
         // Coalesce missed cron ticks to one durable invocation after downtime.
         const next = trigger.kind === "cron" ? nextDue(trigger, now) : null;

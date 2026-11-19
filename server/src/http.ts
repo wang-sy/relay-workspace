@@ -90,7 +90,8 @@ export function relayServer(store: JournalStore, host: string, keys: Map<string,
         }
       }
       if (path === "/v1/workspace" && request.method === "GET") {
-        const snapshot = store.snapshot(viewer, request.headers["if-none-match"]);
+        const snapshot = store.snapshot(viewer, request.headers["if-none-match"], request.headers["x-relay-types"] === "open");
+        response.setHeader("Vary", "X-Relay-Types, Authorization");
         response.setHeader("ETag", snapshot.etag);
         if (!snapshot.body) {
           response.writeHead(304, { "Cache-Control": "no-store" }); response.end(); return;

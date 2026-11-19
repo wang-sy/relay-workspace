@@ -1,7 +1,7 @@
 import Foundation
 
 public struct HostedFunction: Codable, Identifiable, Sendable {
-  public struct Trigger: Codable, Sendable {
+  public struct Trigger: Codable, Equatable, Sendable {
     public let kind: String
     public let itemID: String?
     public let operation: String?
@@ -33,6 +33,8 @@ public struct HostedFunction: Codable, Identifiable, Sendable {
   public let updatedAt: Date
   public let nextAt: Date?
   public let trigger: Trigger
+  public let resolvedTrigger: Trigger?
+  public let triggerRevision: Int?
   public let code: String?
   public let runs: [Run]?
 }

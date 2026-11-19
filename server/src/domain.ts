@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { baseKinds, definitionSchema, fieldMap, mismatch, name, type FieldMap, type TypeRecord } from "./vocabulary.js";
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
@@ -9,13 +10,15 @@ const id = text.refine(value => Buffer.byteLength(value, "utf8") <= 160, "Item I
 const uuid = z.guid().transform(value => value.toLowerCase());
 const timestamp = z.iso.datetime({ offset: true }).refine(value => Number.isFinite(Date.parse(value)))
   .transform(value => new Date(value).toISOString().replace(/\.\d{3}Z$/, "Z"));
-const kinds = z.enum(["direction", "requirement", "task", "idea"]);
 const member = z.strictObject({ name: text, role: z.string() });
 export const changeSchema = z.strictObject({
-  operation: z.enum(["create", "update", "promote", "pause", "resume", "close", "milestone",
-    "result", "handoff", "acknowledge", "remind"]),
+  operation: name,
   itemID: id,
-  kind: kinds.optional(),
+  kind: name.optional(),
+  fields: fieldMap.optional(),
+  payload: fieldMap.optional(),
+  definition: definitionSchema.optional(),
+  expectedRevision: z.number().int().nonnegative().optional(),
   title: text.optional(),
   parentID: id.optional(),
   status: text.optional(),
@@ -44,7 +47,9 @@ export type Write = z.infer<typeof writeSchema>;
 export type Entry = z.infer<typeof entrySchema>;
 export interface Item {
   id: string;
-  kind: z.infer<typeof kinds>;
+  kind: string;
+  baseKind?: typeof baseKinds[number];
+  fields?: FieldMap;
   title: string;
   status: string;
   members: z.infer<typeof member>[];
@@ -62,35 +67,61 @@ function requireChange(value: unknown, message: string): asserts value {
 }
 
 // Called inside the same transaction that allocates the sequence and commits the event.
+export const behavior = (item?: Item) => item?.baseKind ?? item?.kind;
 export function project(write: Write, getItem: (id: string) => Item | undefined,
-                        getEntry: (id: string) => Entry | undefined): Item {
+                        getEntry: (id: string) => Entry | undefined,
+                        getType: (family: string, id: string) => TypeRecord | undefined): Item {
   const c = write.change;
+  requireChange(!c.definition && c.expectedRevision === undefined, "Type declarations need defineType");
+  const eventError = mismatch(c.payload, getType("event", c.operation)?.fields, false);
+  if (eventError) throw new ApiError(422, eventError);
   const previous = getItem(c.itemID);
   let item: Item;
   if (c.operation === "create") {
     if (previous) throw new ApiError(409, "Item already exists");
     requireChange(c.kind && c.title, "create needs kind and title");
-    item = { id: c.itemID, kind: c.kind, title: c.title, status: "待推进", members: [], closed: false };
+    const template = getType("item", c.kind);
+    item = { id: c.itemID, kind: c.kind, title: c.title, status: template?.defaultStatus ?? "待推进", members: [], closed: false,
+      ...(template?.base && template.base !== c.kind ? { baseKind: template.base } : {}) };
   } else {
     requireChange(previous, "Unknown work item");
     item = previous;
   }
   if (c.operation === "promote") {
-    requireChange(item.kind === "idea", "Only an exploration can be promoted");
+    requireChange(behavior(item) === "idea", "Only an exploration can be promoted");
     item.kind = "requirement";
+    delete item.baseKind;
+  }
+  if (c.fields) {
+    const issue = mismatch(c.fields, getType("item", item.kind)?.fields, true);
+    if (issue) throw new ApiError(422, issue);
+    const merged = { ...item.fields, ...c.fields };
+    for (const [key, value] of Object.entries(c.fields)) if (value === null) delete merged[key];
+    requireChange(fieldMap.safeParse(merged).success, "Item fields exceed the JSON size limit");
+    item.fields = merged;
   }
   for (const key of ["parentID", "title", "status", "category", "next", "start", "end"] as const) {
     if (c[key] !== undefined) item[key] = c[key];
   }
   const parent = item.parentID ? getItem(item.parentID) : undefined;
-  switch (item.kind) {
+  switch (behavior(item)) {
     case "direction": requireChange(!item.parentID, "A direction cannot have a parent"); break;
-    case "idea": requireChange(!item.parentID || parent?.kind === "direction", "An exploration can link to a direction"); break;
+    case "idea": requireChange(!item.parentID || behavior(parent) === "direction", "An exploration can link to a direction"); break;
     case "requirement":
-      requireChange(parent?.kind === "direction", "A requirement needs a direction");
+      requireChange(behavior(parent) === "direction", "A requirement needs a direction");
       requireChange(item.start && item.end, "A requirement needs start and end");
       break;
-    case "task": requireChange(parent?.kind === "requirement", "A task needs a requirement"); break;
+    case "task": requireChange(behavior(parent) === "requirement", "A task needs a requirement"); break;
+    default: requireChange(!item.parentID || parent, "Unknown parent");
+  }
+  if (c.parentID) {
+    const seen = new Set([item.id]);
+    let ancestor = parent;
+    while (ancestor) {
+      requireChange(!seen.has(ancestor.id), "Items cannot form a cycle");
+      seen.add(ancestor.id);
+      ancestor = ancestor.parentID ? getItem(ancestor.parentID) : undefined;
+    }
   }
   requireChange(!item.start || !item.end || item.start <= item.end, "End precedes start");
   for (const member of c.members ?? []) {

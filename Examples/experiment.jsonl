@@ -1,0 +1,6 @@
+{"requestID":"f50b6d74-b897-4944-b4ae-08a0a178f6a0","change":{"operation":"defineType","itemID":"产品 / 用户研究","expectedRevision":0,"definition":{"family":"category"}}}
+{"requestID":"f50b6d74-b897-4944-b4ae-08a0a178f6a1","change":{"operation":"defineType","itemID":"experiment","expectedRevision":0,"definition":{"family":"item","label":"用户实验","base":"idea","defaultStatus":"收集样本","fields":{"sampleSize":{"type":"number","label":"样本量"}}}}}
+{"requestID":"f50b6d74-b897-4944-b4ae-08a0a178f6a2","change":{"operation":"defineType","itemID":"复验通过","expectedRevision":0,"definition":{"family":"event","fields":{"passRate":{"type":"number","label":"通过率"}}}}}
+{"requestID":"f50b6d74-b897-4944-b4ae-08a0a178f6a3","change":{"operation":"defineType","itemID":"实验复核","expectedRevision":0,"definition":{"family":"trigger","source":{"kind":"event","operation":"复验通过"}}}}
+{"requestID":"f50b6d74-b897-4944-b4ae-08a0a178f6a4","change":{"operation":"create","kind":"experiment","itemID":"EX-first-use","title":"验证首次使用流程","category":"产品 / 用户研究","members":[{"name":"River","role":"实验设计"}],"fields":{"sampleSize":24}}}
+{"requestID":"f50b6d74-b897-4944-b4ae-08a0a178f6a5","change":{"operation":"复验通过","itemID":"EX-first-use","status":"已复验","payload":{"passRate":0.92},"note":"24 位参与者完成复验。"}}

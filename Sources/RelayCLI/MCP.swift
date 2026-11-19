@@ -3,10 +3,67 @@ import RelayCore
 
 private typealias Object = [String: Any]
 private func prop(_ text: String) -> Object { ["type": "string", "description": text] }
+private let sourceProperties: Object = [
+  "kind": prop(
+    "event, at or cron. When deploying, a named trigger template or a business event name is also accepted."
+  ),
+  "operation": prop("Any event name for an event subscription."),
+  "itemID": prop("Optional target item."),
+  "delaySeconds": ["type": "integer", "minimum": 0, "maximum": 31_622_400],
+  "at": prop("ISO 8601 timestamp with timezone for at."),
+  "expression": prop("Five-field cron expression."), "timezone": prop("IANA timezone for cron."),
+]
+private let schedulingSource: Object = [
+  "type": "object", "required": ["kind"], "additionalProperties": false,
+  "properties": sourceProperties,
+]
+private let template: Object = [
+  "type": "object", "required": ["family"], "additionalProperties": false,
+  "properties": [
+    "family": [
+      "type": "string", "enum": ["item", "event", "trigger", "category", "status", "role"],
+    ],
+    "label": prop("Human-facing type name."),
+    "description": prop("When agents should use this type."),
+    "base": [
+      "type": "string", "enum": ItemKind.allCases.map(\.rawValue),
+      "description": "Optional built-in behavior for item types.",
+    ],
+    "defaultStatus": prop("Optional initial status for this item type."),
+    "fields": [
+      "type": "object",
+      "additionalProperties": [
+        "type": "object", "required": ["type"], "additionalProperties": false,
+        "properties": [
+          "type": ["enum": ["any", "string", "number", "boolean", "object", "array"]],
+          "label": prop("Field label"),
+        ],
+      ],
+    ],
+    "source": schedulingSource,
+  ] as Object,
+]
 private let changeFields: Object = [
-  "operation": ["type": "string", "enum": WorkOperation.allCases.map(\.rawValue)],
-  "itemID": prop("Stable work item ID. Look up an existing item before creating a new one."),
-  "kind": ["type": "string", "enum": ItemKind.allCases.map(\.rawValue)],
+  "operation": prop(
+    "Use a built-in operation (\(WorkOperation.allCases.map(\.rawValue).joined(separator: ", "))) or any new business event name."
+  ),
+  "itemID": prop("Stable work item ID, or the type name when operation is defineType."),
+  "kind": prop(
+    "Any work item type. Built-in choices are direction, requirement, task and idea. Look up known names with relay_read scope types."
+  ),
+  "fields": [
+    "type": "object", "additionalProperties": true,
+    "description": "Patch item properties with JSON values. Top-level null removes a key.",
+  ],
+  "payload": [
+    "type": "object", "additionalProperties": true,
+    "description": "Structured event data preserved in history and passed to hosted functions.",
+  ],
+  "definition": template,
+  "expectedRevision": [
+    "type": "integer", "minimum": 0,
+    "description": "Required for defineType, 0 for the first declaration.",
+  ],
   "parentID": prop(
     "Direction ID for a requirement or optional exploration link; requirement ID for a task."),
   "title": prop("Title for create, or an updated title."),
@@ -41,10 +98,13 @@ private let changeFields: Object = [
 private let descriptors: [Object] = [
   [
     "name": "relay_read",
-    "description": "Read the current team requirement board, full journal or potential omissions.",
+    "description":
+      "Read the board, journal, potential omissions or team vocabulary. Use scope types to discover existing names, fields, roles, statuses, categories and templates before writing.",
     "inputSchema": [
       "type": "object",
-      "properties": ["scope": ["type": "string", "enum": ["workspace", "board", "gaps"]]],
+      "properties": [
+        "scope": ["type": "string", "enum": ["workspace", "board", "gaps", "types"]]
+      ],
       "additionalProperties": false,
     ],
   ],
@@ -80,20 +140,7 @@ private let functionTool: Object = [
       ],
       "name": prop("Display name, required for deploy."),
       "enabled": ["type": "boolean", "description": "Set false to save a paused definition."],
-      "trigger": [
-        "type": "object", "required": ["kind"], "additionalProperties": false,
-        "properties": [
-          "kind": ["type": "string", "enum": ["event", "at", "cron"]],
-          "operation": ["type": "string", "enum": WorkOperation.allCases.map(\.rawValue)],
-          "itemID": prop("Optional target. Event triggers match all items if omitted."),
-          "delaySeconds": [
-            "type": "integer", "minimum": 0, "description": "Optional delay following an event.",
-          ],
-          "at": prop("ISO 8601 timestamp with timezone, required for at."),
-          "expression": prop("Five-field cron expression, required for cron."),
-          "timezone": prop("IANA timezone, required for cron."),
-        ],
-      ],
+      "trigger": schedulingSource,
       "code": prop(
         "Synchronous JavaScript function body. ctx has current item, original event, now, scheduledAt, actor, functionID, revision, and items for unscoped timers. Return [] to skip or up to 8 standard relay_apply change objects. For remind include itemID, due, recipient and note. For delayed pauses check ctx.item?.pauseID === ctx.event?.id first. Relay commits actions together. No Node or network access."
       ),

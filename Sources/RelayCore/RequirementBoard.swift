@@ -29,7 +29,7 @@ extension Workspace {
     -> [RequirementRow]
   {
     let index = RequirementIndex(self)
-    return items.values.filter { $0.kind == .requirement }.compactMap { item in
+    return items.values.filter(\.appearsOnBoard).compactMap { item in
       index.row(
         for: item, direction: item.parentID.flatMap { items[$0]?.title },
         now: now, calendar: calendar)
@@ -41,7 +41,7 @@ extension Workspace {
     }
   }
 
-  /// Items a member owns or is being asked to act on, plus their requirement and direction.
+  /// Include ancestors so a member's nested items stay reachable in the tree.
   public func itemIDs(relatedTo member: String) -> Set<String> {
     guard !member.isEmpty else { return [] }
     let index = RequirementIndex(self)
@@ -51,12 +51,9 @@ extension Workspace {
         item.members.contains(where: { $0.name == member })
           || index.pending(for: item).contains(where: { $0.change.recipient == member })
       else { continue }
-      ids.insert(item.id)
-      if item.kind == .requirement || item.kind == .task,
-        let parent = item.parentID.flatMap({ items[$0] })
-      {
-        ids.insert(parent.id)
-        if item.kind == .task, let directionID = parent.parentID { ids.insert(directionID) }
+      var ancestor: Item? = item
+      while let current = ancestor, ids.insert(current.id).inserted {
+        ancestor = current.parentID.flatMap { items[$0] }
       }
     }
     return ids
@@ -73,9 +70,11 @@ private struct RequirementIndex {
   let tasks: [String: [Item]]
 
   init(_ workspace: Workspace) {
-    events = Dictionary(grouping: workspace.entries, by: { $0.change.itemID })
+    events = Dictionary(
+      grouping: workspace.entries.filter { $0.change.operation != .defineType },
+      by: { $0.change.itemID })
     tasks = Dictionary(
-      grouping: workspace.items.values.filter { $0.kind == .task },
+      grouping: workspace.items.values.filter { $0.behavior == .task },
       by: { $0.parentID ?? "" })
   }
 
@@ -150,6 +149,7 @@ private struct RequirementIndex {
       let hasStarted = ([item] + (tasks[item.id] ?? [])).contains { source in
         (events[source.id] ?? []).contains {
           [.resume, .result, .acknowledge, .handoff, .pause].contains($0.change.operation)
+            || !WorkOperation.allCases.contains($0.change.operation)
             || ($0.change.operation == .update && clean($0.change.note) != nil)
         }
       }
@@ -169,7 +169,8 @@ private struct RequirementIndex {
       progress = due < now ? "\(day) 待记录结果 · \(note)" : "\(day) \(note)"
     } else {
       let latest = history.last {
-        [.create, .promote, .resume, .update, .result, .acknowledge].contains($0.change.operation)
+        ([.create, .promote, .resume, .update, .result, .acknowledge].contains($0.change.operation)
+          || !WorkOperation.allCases.contains($0.change.operation))
           && [clean($0.change.note), clean($0.change.next), clean($0.change.status)].contains {
             $0 != nil
           }

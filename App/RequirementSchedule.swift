@@ -2,6 +2,7 @@ import RelayCore
 import SwiftUI
 
 struct RequirementSchedule: View {
+  @EnvironmentObject private var model: WorkspaceModel
   @Environment(\.dynamicTypeSize) private var typeSize
   @Binding var offset: Int
   let items: [Item]
@@ -145,8 +146,11 @@ struct RequirementSchedule: View {
       let dates = [item.start, item.end].compactMap { $0 }.map(RelayDate.short).joined(
         separator: " – ")
       let members = item.members.map(\.name).joined(separator: "、")
-      Text([dates, members, item.displayStatus].filter { !$0.isEmpty }.joined(separator: " · "))
-        .font(.caption).foregroundStyle(RelayPalette.secondary)
+      Text(
+        [dates, members, model.state.status(of: item)].filter { !$0.isEmpty }.joined(
+          separator: " · ")
+      )
+      .font(.caption).foregroundStyle(RelayPalette.secondary)
     }.padding(.vertical, 2)
   }
 

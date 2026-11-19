@@ -17,14 +17,17 @@ struct RequirementsView: View {
   let scope: Set<String>?
   @AppStorage("relay.requirements.layout") private var layout = RequirementLayout.tree
   @Environment(\.dynamicTypeSize) private var typeSize
-  @State private var collapsedDirections: Set<String> = []
-  @State private var expandedRequirements: Set<String> = []
+  @State private var expansion: [String: Bool] = [:]
   @State private var weekOffset = 0
 
   var body: some View {
-    let items = state.items.values.filter { $0.kind != .idea && (scope?.contains($0.id) ?? true) }
-      .sorted { ($0.title, $0.id) < ($1.title, $1.id) }
-    let requirements = items.filter { $0.kind == .requirement }
+    let items = state.items.values.filter {
+      $0.behavior != .idea && (scope?.contains($0.id) ?? true)
+    }
+    .sorted { ($0.title, $0.id) < ($1.title, $1.id) }
+    let requirements = items.filter(\.appearsOnBoard)
+    let hasCustom = requirements.contains { !ItemKind.allCases.contains($0.kind) }
+    let countLabel = "\(requirements.count) 个" + (hasCustom ? "事项" : "需求")
     RelayPage { width in
       HStack(spacing: 12) {
         Picker("需求视图", selection: $layout) {
@@ -36,7 +39,7 @@ struct RequirementsView: View {
         .frame(maxWidth: width < 500 ? .infinity : 300)
         if width >= 500 && !typeSize.isAccessibilitySize {
           Spacer()
-          Text(scope == nil ? "\(requirements.count) 个需求" : "与我有关 · \(requirements.count) 个需求")
+          Text(scope == nil ? countLabel : "与我有关 · " + countLabel)
             .font(.subheadline).foregroundStyle(RelayPalette.secondary)
         }
       }
@@ -48,13 +51,14 @@ struct RequirementsView: View {
           outline(items, compact: width < 680 || typeSize.isAccessibilitySize)
         }
       case .gantt:
-        if requirements.isEmpty {
-          emptyView
+        let scheduled = requirements.filter { $0.start != nil && $0.end != nil }
+        if scheduled.isEmpty {
+          ContentUnavailableView("还没有排期", systemImage: "calendar")
         } else {
           TimelineView(.everyMinute) { clock in
             RequirementSchedule(
               offset: $weekOffset,
-              items: requirements.sorted {
+              items: scheduled.sorted {
                 ($0.start ?? .distantFuture, $0.id) < ($1.start ?? .distantFuture, $1.id)
               }, entries: state.entries, width: width, today: clock.date)
           }
@@ -77,45 +81,42 @@ struct RequirementsView: View {
       systemImage: layout == .gantt ? "calendar" : "flag")
   }
 
-  private func outline(_ items: [Item], compact: Bool) -> some View {
+  private struct TreeRow: Identifiable {
+    let item: Item
+    let depth: Int
+    let count: Int
+    let expanded: Bool
+    var id: String { item.id }
+  }
+
+  private func treeRows(_ items: [Item]) -> [TreeRow] {
     let children = Dictionary(
       grouping: items.compactMap { item in
         item.parentID.map { (parent: $0, item: item) }
       }, by: \.parent
     ).mapValues { $0.map(\.item) }
-    let directions = items.filter { $0.kind == .direction }
+    let ids = Set(items.map(\.id))
+    let roots = items.filter { $0.parentID.map { !ids.contains($0) } ?? true }
+    var stack = roots.reversed().map { ($0, 0) }
+    var rows = [TreeRow]()
+    while let (item, depth) = stack.popLast() {
+      let descendants = children[item.id] ?? []
+      let open = expansion[item.id] ?? (item.behavior == .direction || depth == 0)
+      rows.append(TreeRow(item: item, depth: depth, count: descendants.count, expanded: open))
+      if open { stack.append(contentsOf: descendants.reversed().map { ($0, depth + 1) }) }
+    }
+    return rows
+  }
+
+  private func outline(_ items: [Item], compact: Bool) -> some View {
+    let rows = treeRows(items)
     return VStack(spacing: 0) {
-      ForEach(directions) { direction in
-        let requirements = children[direction.id] ?? []
-        let open = !collapsedDirections.contains(direction.id)
-        if direction.id != directions.first?.id { Hairline() }
-        outlineRow(direction, depth: 0, count: requirements.count, expanded: open, compact: compact)
-        {
-          if open {
-            collapsedDirections.insert(direction.id)
-          } else {
-            collapsedDirections.remove(direction.id)
-          }
-        }
-        if open {
-          ForEach(requirements) { requirement in
-            let tasks = children[requirement.id] ?? []
-            let expanded = expandedRequirements.contains(requirement.id)
-            outlineRow(
-              requirement, depth: 1, count: tasks.count, expanded: expanded, compact: compact
-            ) {
-              if expanded {
-                expandedRequirements.remove(requirement.id)
-              } else {
-                expandedRequirements.insert(requirement.id)
-              }
-            }
-            if expanded {
-              ForEach(tasks) { task in
-                outlineRow(task, depth: 2, compact: compact)
-              }
-            }
-          }
+      ForEach(rows) { row in
+        if row.depth == 0 && row.id != rows.first?.id { Hairline() }
+        outlineRow(
+          row.item, depth: row.depth, count: row.count, expanded: row.expanded, compact: compact
+        ) {
+          expansion[row.id] = !row.expanded
         }
       }
     }
@@ -128,9 +129,9 @@ struct RequirementsView: View {
     _ item: Item, depth: Int, count: Int = 0, expanded: Bool = false, compact: Bool,
     toggle: (() -> Void)? = nil
   ) -> some View {
-    let status = item.displayStatus
+    let status = state.status(of: item)
     let members = item.members.map(\.name).joined(separator: "、")
-    let countLabel = count > 0 ? "\(count) 个\(depth == 0 ? "需求" : "任务")" : ""
+    let countLabel = count > 0 ? "\(count) 个子项" : ""
     let summary = [countLabel, members, status].filter { !$0.isEmpty }.joined(separator: " · ")
     return HStack(spacing: 4) {
       if count > 0, let toggle {
@@ -146,14 +147,18 @@ struct RequirementsView: View {
       }
       NavigationLink(value: item.id) {
         HStack(spacing: 9) {
-          Image(systemName: item.kind.icon)
+          Image(systemName: item.behavior.icon)
             .font(.system(size: depth == 0 ? 16 : 14, weight: .medium))
-            .foregroundStyle(item.kind.tone).frame(width: 20).accessibilityHidden(true)
+            .foregroundStyle(item.behavior.tone).frame(width: 20).accessibilityHidden(true)
           VStack(alignment: .leading, spacing: 4) {
             Text(item.title).font(depth == 0 ? .headline : .body).foregroundStyle(
               RelayPalette.primary
             )
             .fixedSize(horizontal: false, vertical: true)
+            if !ItemKind.allCases.contains(item.kind) {
+              Text(state.label(.item, item.kind.rawValue)).font(.caption).foregroundStyle(
+                RelayPalette.secondary)
+            }
             if compact {
               Text(summary).font(.caption).foregroundStyle(RelayPalette.secondary)
             }
@@ -167,13 +172,13 @@ struct RequirementsView: View {
               Text(members).font(.subheadline).foregroundStyle(RelayPalette.secondary)
                 .lineLimit(1).frame(maxWidth: 180, alignment: .trailing)
             }
-            StatusLabel(text: status, tone: item.kind.tone)
+            StatusLabel(text: status, tone: item.behavior.tone)
           }
         }.padding(.vertical, compact ? 8 : 10).padding(.trailing, 6)
       }
       .buttonStyle(RelayRowStyle())
-      .accessibilityLabel("\(item.kind.label)，\(item.title)，\(summary)")
+      .accessibilityLabel("\(state.label(.item, item.kind.rawValue))，\(item.title)，\(summary)")
     }
-    .padding(.leading, CGFloat(depth) * (compact ? 12 : 25))
+    .padding(.leading, CGFloat(min(depth, 5)) * (compact ? 12 : 25))
   }
 }

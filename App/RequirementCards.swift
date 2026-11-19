@@ -30,7 +30,8 @@ struct RequirementCards: View {
               VStack(alignment: .leading, spacing: 9) {
                 HStack(spacing: 7) {
                   Circle().fill(lane.tone).frame(width: 8, height: 8).accessibilityHidden(true)
-                  Text(lane.status).font(.headline).accessibilityAddTraits(.isHeader)
+                  Text(state.label(.status, lane.status)).font(.headline).accessibilityAddTraits(
+                    .isHeader)
                   Spacer()
                   Text("\(lane.items.count)").font(.caption.monospacedDigit()).foregroundStyle(
                     RelayPalette.muted
@@ -108,6 +109,10 @@ struct RequirementCards: View {
         }
         Text(item.title).font(.headline).foregroundStyle(RelayPalette.primary)
           .fixedSize(horizontal: false, vertical: true)
+        if !ItemKind.allCases.contains(item.kind) {
+          Text(state.label(.item, item.kind.rawValue)).font(.caption).foregroundStyle(
+            RelayPalette.secondary)
+        }
         if let attention = row?.attention {
           let waiting = attention.change.operation == .handoff
           let recipient = attention.change.recipient.map { $0 == "*" ? "全体成员" : $0 }

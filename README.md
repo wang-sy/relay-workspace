@@ -44,7 +44,7 @@ GitHub Actions 的成功构建提供 **Relay-Workspace-macOS** 安装包。下�
 | HTTP 接口 | 行为 |
 | --- | --- |
 | `GET /healthz` | 服务健康状态。 |
-| `GET /v1/workspace` | 返回 `{viewer, workspace: {items, entries, conflicts}}`，支持 `If-None-Match`。 |
+| `GET /v1/workspace` | 支持 `If-None-Match`。带 `X-Relay-Types: open` 时返回完整的 `items`、`entries`、`definitions` 和 `conflicts`。旧版客户端继续读取内置类型的兼容视图。 |
 | `POST /v1/events` | 提交 `requestID`、`source`、`change` 以及可选的 `session`。本机演示模式还需提供 `actor`。新事件返回 201，同一请求重试返回原事件及 200，复用 ID 提交不同内容返回 409。 |
 | `GET /v1/functions`、`GET /v1/functions/:id` | 查看托管函数。详情含当前源码、版本和最近 30 次执行。 |
 | `PUT /v1/functions/:id`、`PATCH /v1/functions/:id` | 发布定义或修改启停状态。两者均使用成员身份和 `expectedRevision`。 |
@@ -99,6 +99,33 @@ JSON
 | milestone / result | 计划日期 due 和内容 note。结果通过 reference 指向原计划事件 UUID。 |
 | handoff / acknowledge | 交给 recipient 并填写 note。回应通过 reference 指向具体的交付事件。任务的 pause 和 handoff 可填 affectsRequirement，表示是否影响上级需求。 |
 | remind | due、recipient、note。指定当前暂停事件的 UUID 作为 reference 即可约定条件回看。 |
+
+## 让 Agent 定义团队的工作方式
+
+Agent 可以直接用新名字创建事项、记录事件、填写状态、成员角色和探索分类。比如创建一个「访谈」，加上「访谈对象」字段，稍后记录一次「已回访」事件。另一个 Agent 用 `relay types` 或 `relay_read` 的 `scope: "types"` 就能查到工作空间用过的名字、字段和已登记的模板。成员打开详情即可看到相应的属性和事件数据。
+
+需要把约定共享给团队时，Agent 用 `relay_apply` 写入 `operation: "defineType"`，以 `itemID` 为类型名，并填写 `definition` 和 `expectedRevision`。首次定义的版本号传 0，修改时传读到的版本号和完整的新定义。重复发送同一请求时沿用原 `requestID`。
+
+| 团队可以定义 | 在 Relay 中的用法 |
+| --- | --- |
+| 事项 `item` | 可以声明展示名称、默认状态、字段和可选的 `base`。例如「实验」沿用 `idea` 就进入探索池。独立事项可以自由嵌套，出现在树状图和状态卡片中，填写起止日期后也会出现在甘特图。已经使用的类型保留原有层级规则。 |
+| 事件 `event` | 直接把业务动作写进 `operation`。用 `payload` 保存本次发生了什么，用 `fields` 更新事项的当前属性。顶层属性设为 `null` 可移除该属性，历史事件保留原值。 |
+| 分类、状态、角色 | `category`、`status`、`role` 都能随写随用，也可以先登记名称、显示名和说明。探索池会显示预先创建的空分类，支持「产品 / 用户研究」这样的分类路径。 |
+| 触发器 `trigger` | 为事件、指定时间或 cron 起一个业务名称。发布函数时用这个名称就能订阅。直接使用一个未登记的名称会订阅同名事件。函数保留发布时的触发条件，重新发布可采用新版模板。 |
+
+字段可以保存字符串、数字、布尔值、数组和嵌套对象。登记了类型的字段会在写入时校验，额外的字段仍可直接使用。事项字段和事件载荷分别支持 64 KiB、最多 16 层。需要精确保存超出 JavaScript 安全整数范围的编号时使用字符串。
+
+仓库中的示例会创建「产品 / 用户研究」分类、定义「用户实验」及其「样本量」，并写入一次带通过率的「复验通过」。可从仓库根目录在临时工作空间运行。
+
+```sh
+demo=$(mktemp -d)
+while IFS= read -r change; do
+  printf '%s\n' "$change" | relay --workspace "$demo" apply
+done < Examples/experiment.jsonl
+relay --workspace "$demo" types
+```
+
+Agent 将函数部署到服务时，可用 `{"kind":"实验复核"}` 订阅示例中的事件。函数通过 `ctx.item.fields.sampleSize` 获取当前样本量，通过 `ctx.event.change.payload.passRate` 获取这次复验的通过率。文件工作空间可保存这些约定，执行托管函数需要 Relay 服务。
 
 ## 服务端托管函数
 

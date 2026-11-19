@@ -1,8 +1,16 @@
 import RelayCore
 import SwiftUI
 
-extension Item {
-  var displayStatus: String { closed ? "已完成" : status }
+extension Workspace {
+  func label(_ family: TypeDefinition.Family, _ id: String) -> String {
+    if let label = typeRecord(family, id)?.definition.label { return label }
+    if family == .item { return ItemKind(rawValue: id).label }
+    if family == .event { return WorkOperation(rawValue: id).label }
+    return id
+  }
+  func status(of item: Item) -> String {
+    item.closed ? "已完成" : label(.status, item.status)
+  }
 }
 
 extension ItemKind {
@@ -12,6 +20,7 @@ extension ItemKind {
     case .requirement: return "需求"
     case .task: return "任务"
     case .idea: return "探索"
+    default: return rawValue
     }
   }
   var icon: String {
@@ -20,6 +29,7 @@ extension ItemKind {
     case .requirement: return "calendar"
     case .task: return "checklist"
     case .idea: return "lightbulb"
+    default: return "square.stack.3d.up"
     }
   }
   var tone: Color {
@@ -28,6 +38,7 @@ extension ItemKind {
     case .requirement: return RelayPalette.blue
     case .task: return RelayPalette.teal
     case .idea: return RelayPalette.amber
+    default: return RelayPalette.accent
     }
   }
 }
@@ -46,6 +57,8 @@ extension WorkOperation {
     case .handoff: return "交付"
     case .acknowledge: return "回应交付"
     case .remind: return "约定回看"
+    case .defineType: return "定义类型"
+    default: return rawValue
     }
   }
 }
@@ -65,25 +78,32 @@ private enum WorkspaceTool: String, Identifiable {
 }
 
 struct ItemLink: View {
+  @EnvironmentObject private var model: WorkspaceModel
   let item: Item
   var subtitle: String? = nil
 
   var body: some View {
     NavigationLink(value: item.id) {
       HStack(alignment: .top, spacing: 10) {
-        SymbolTile(symbol: item.kind.icon, tone: item.kind.tone)
+        SymbolTile(symbol: item.behavior.icon, tone: item.behavior.tone)
         VStack(alignment: .leading, spacing: 4) {
           Text(item.title).font(.headline).foregroundStyle(RelayPalette.primary)
+          if !ItemKind.allCases.contains(item.kind) {
+            Text(model.state.label(.item, item.kind.rawValue)).font(.caption).foregroundStyle(
+              RelayPalette.secondary)
+          }
           let context =
             subtitle
-            ?? item.members.map { $0.role.isEmpty ? $0.name : "\($0.name) · \($0.role)" }
+            ?? item.members.map {
+              $0.role.isEmpty ? $0.name : "\($0.name) · \(model.state.label(.role, $0.role))"
+            }
             .joined(separator: "，")
           if !context.isEmpty {
             Text(context).font(.subheadline).foregroundStyle(RelayPalette.secondary)
           }
         }
         Spacer(minLength: 4)
-        StatusLabel(text: item.displayStatus, tone: item.kind.tone)
+        StatusLabel(text: model.state.status(of: item), tone: item.behavior.tone)
       }.padding(.vertical, 7).padding(.horizontal, 2)
     }.buttonStyle(RelayRowStyle())
   }
@@ -112,7 +132,12 @@ struct WorkspaceView: View {
   #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
   #endif
-  @State private var selection = Page.directions
+  @State private var selection: Page = {
+    #if os(iOS) && targetEnvironment(simulator) && DEBUG
+      if ProcessInfo.processInfo.arguments.contains("--preview-explorations") { return .ideas }
+    #endif
+    return .directions
+  }()
   @State private var directionPath: [String] = []
   @State private var ideaPath: [String] = []
   @State private var onlyMine = false
@@ -377,19 +402,27 @@ struct WorkspaceView: View {
 
   private func ideas(scope: Set<String>?) -> some View {
     let items = model.state.items.values.filter {
-      $0.kind == .idea && (scope?.contains($0.id) ?? true)
+      $0.behavior == .idea && (scope?.contains($0.id) ?? true)
     }
     .sorted { ($0.title, $0.id) < ($1.title, $1.id) }
     let grouped = Dictionary(grouping: items) {
-      $0.category.flatMap { $0.isEmpty ? nil : $0 } ?? "待分类"
+      $0.category.flatMap { $0.isEmpty ? nil : $0 } ?? ""
     }
+    let declared = (model.state.definitions ?? [:]).values.filter {
+      $0.definition.family == .category
+    }.map(\.id)
+    let categories = Set(grouped.keys).union(scope == nil ? declared : []).sorted()
     return RelayPage { _ in
-      if items.isEmpty {
+      if categories.isEmpty {
         ContentUnavailableView(scope == nil ? "还没有探索" : "没有与你相关的探索", systemImage: "lightbulb")
       }
-      ForEach(grouped.keys.sorted(), id: \.self) { category in
+      ForEach(categories, id: \.self) { category in
         RelayPanel(spacing: 4) {
-          PanelTitle(category).padding(.bottom, 3)
+          PanelTitle(category.isEmpty ? "待分类" : model.state.label(.category, category)).padding(
+            .bottom, 3)
+          if grouped[category] == nil {
+            Text("还没有探索事项").font(.subheadline).foregroundStyle(RelayPalette.secondary)
+          }
           ForEach(grouped[category] ?? []) { item in
             if item.id != grouped[category]?.first?.id { Hairline() }
             ItemLink(
@@ -401,7 +434,7 @@ struct WorkspaceView: View {
   }
 
   private func openItem(_ item: Item) {
-    selection = item.kind == .idea ? .ideas : .directions
+    selection = item.behavior == .idea ? .ideas : .directions
     if selection == .ideas { ideaPath = [item.id] } else { directionPath = [item.id] }
     tool = nil
   }

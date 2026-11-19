@@ -41,7 +41,9 @@ struct Editor: View {
   }
   private var candidates: [Item] {
     let expected: ItemKind = kind == .task && operation == .create ? .requirement : .direction
-    return model.state.items.values.filter { $0.kind == expected }.sorted { $0.title < $1.title }
+    return model.state.items.values.filter { $0.behavior == expected }.sorted {
+      $0.title < $1.title
+    }
   }
   private var references: [Entry] {
     guard let item = target.item else { return [] }
@@ -93,13 +95,13 @@ struct Editor: View {
         }
         if operation != .remind {
           TextField("状态（可自由填写）", text: $status)
-          if kind == .idea || target.item?.kind == .idea { TextField("分类路径", text: $category) }
+          if kind == .idea || target.item?.behavior == .idea { TextField("分类路径", text: $category) }
           TextField("下一步", text: $next)
           TextField("新增或更新参与成员", text: $member)
           if !member.isEmpty { TextField("此人在本事项中的角色", text: $role) }
         }
         if operation == .promote || operation == .create && kind == .requirement
-          || operation == .update && target.item?.kind == .requirement
+          || operation == .update && target.item?.behavior == .requirement
         {
           DatePicker("计划开始", selection: $start, displayedComponents: .date)
           DatePicker("计划结束", selection: $end, displayedComponents: .date)
@@ -107,7 +109,7 @@ struct Editor: View {
         if [.milestone, .remind].contains(operation) { DatePicker("约定时间", selection: $due) }
         if [.handoff, .remind].contains(operation) { TextField("接收成员（* 表示全体）", text: $recipient) }
         if operation == .pause { TextField("在等谁（可选）", text: $waitingFor) }
-        if target.item?.kind == .task && [.pause, .handoff].contains(operation) {
+        if target.item?.behavior == .task && [.pause, .handoff].contains(operation) {
           Toggle("影响上级需求的下一步", isOn: $affectsRequirement)
         }
         if operation == .remind && target.item?.pauseID != nil {
@@ -129,7 +131,7 @@ struct Editor: View {
             Button("保存") { Task { await save() } }
               .disabled(
                 saving
-                  || (operation == .close && target.item?.kind == .requirement
+                  || (operation == .close && target.item?.behavior == .requirement
                     && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
               )
           }
@@ -165,7 +167,7 @@ struct Editor: View {
       if !member.isEmpty { c.members = [Member(member, role)] }
     }
     if operation == .promote || operation == .create && kind == .requirement
-      || operation == .update && target.item?.kind == .requirement
+      || operation == .update && target.item?.behavior == .requirement
     {
       c.start = start
       c.end = end
@@ -176,7 +178,7 @@ struct Editor: View {
       let name = waitingFor.trimmingCharacters(in: .whitespacesAndNewlines)
       if !name.isEmpty { c.recipient = name }
     }
-    if target.item?.kind == .task && [.pause, .handoff].contains(operation) {
+    if target.item?.behavior == .task && [.pause, .handoff].contains(operation) {
       c.affectsRequirement = affectsRequirement
     }
     if operation == .remind && conditional { c.reference = target.item?.pauseID }

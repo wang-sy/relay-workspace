@@ -46,7 +46,11 @@ jobs:
         run: |
           export RELAY_DB="$RUNNER_TEMP/mobile.sqlite" RELAY_LOG_REQUESTS=1
           export RELAY_TEST_ACCESS_LOG="$RUNNER_TEMP/relay-http.log"
-          "$(swift build --show-bin-path)/relay" --workspace "$RUNNER_TEMP/demo" sample > /dev/null
+          cli="$(swift build --show-bin-path)/relay"
+          "$cli" --workspace "$RUNNER_TEMP/demo" sample > /dev/null
+          while IFS= read -r change; do
+            printf '%s\n' "$change" | "$cli" --workspace "$RUNNER_TEMP/demo" apply > /dev/null
+          done < Examples/experiment.jsonl
           node server/dist/import-journal.js "$RUNNER_TEMP/demo/RelayEvents"
           node server/dist/index.js > "$RELAY_TEST_ACCESS_LOG" 2>&1 &
           service_pid=$!

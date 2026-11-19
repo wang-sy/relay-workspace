@@ -1,13 +1,5 @@
 import Foundation
 
-public enum ItemKind: String, Codable, CaseIterable, Sendable {
-  case direction, requirement, task, idea
-}
-public enum WorkOperation: String, Codable, CaseIterable, Sendable {
-  case create, update, promote, pause, resume, close, milestone, result, handoff, acknowledge,
-    remind
-}
-
 public struct Member: Codable, Hashable, Sendable {
   public var name: String
   public var role: String
@@ -22,6 +14,10 @@ public struct Change: Codable, Equatable, Sendable {
   public var operation: WorkOperation
   public var itemID: String
   public var kind: ItemKind?
+  public var fields: [String: JSONValue]?
+  public var payload: [String: JSONValue]?
+  public var definition: TypeDefinition?
+  public var expectedRevision: Int?
   public var title: String?
   public var parentID: String?
   public var status: String?
@@ -69,6 +65,12 @@ public struct Entry: Codable, Identifiable, Equatable, Sendable {
 public struct Item: Codable, Identifiable, Sendable {
   public let id: String
   public var kind: ItemKind
+  public var baseKind: ItemKind?
+  public var behavior: ItemKind { baseKind ?? kind }
+  public var appearsOnBoard: Bool {
+    behavior == .requirement || !ItemKind.allCases.contains(behavior)
+  }
+  public var fields: [String: JSONValue]?
   public var parentID: String?
   public var title: String
   public var status: String
@@ -114,12 +116,15 @@ public enum Wire {
 public struct Workspace: Codable, Sendable {
   public private(set) var items: [String: Item] = [:]
   public private(set) var entries: [Entry] = []
+  public private(set) var definitions: [String: RegisteredType]?
   public private(set) var conflicts: [String] = []
   public init() {}
   public func children(of id: String) -> [Item] {
     items.values.filter { $0.parentID == id }.sorted { $0.title < $1.title }
   }
-  public func history(_ id: String) -> [Entry] { entries.filter { $0.change.itemID == id } }
+  public func history(_ id: String) -> [Entry] {
+    entries.filter { $0.change.itemID == id && $0.change.operation != .defineType }
+  }
   public func resolved(_ id: UUID) -> Bool {
     entries.contains {
       $0.change.reference == id && [.result, .acknowledge].contains($0.change.operation)
@@ -134,11 +139,11 @@ public struct Workspace: Codable, Sendable {
     var gaps: [Gap] = []
     for e in entries {
       let c = e.change
-      guard let item = items[c.itemID], !item.closed, item.kind != .idea else { continue }
+      guard let item = items[c.itemID], !item.closed, item.behavior != .idea else { continue }
       var label: String?
       switch c.operation {
       case .create
-      where item.kind == .requirement
+      where item.behavior == .requirement
         && (item.end ?? .distantFuture) < Calendar.current.startOfDay(for: now):
         label = "计划结束日已过"
       case .pause where item.pauseID == e.id && now.timeIntervalSince(e.time) >= 3 * 86400:
@@ -170,6 +175,41 @@ public struct Workspace: Codable, Sendable {
     try require(
       present(c.itemID) && c.itemID.utf8.count <= 160 && present(e.actor),
       "An item ID and actor are required")
+    try require(
+      validName(c.operation.rawValue) && (c.kind.map { validName($0.rawValue) } ?? true),
+      "Invalid type name")
+    if c.operation == .defineType {
+      guard let d = c.definition, let expected = c.expectedRevision, expected >= 0,
+        expected < Int.max
+      else {
+        throw RelayError("defineType needs a definition and expectedRevision")
+      }
+      var declaration = Change(.defineType, c.itemID)
+      declaration.definition = d
+      declaration.expectedRevision = expected
+      try require(c == declaration, "Unexpected fields on defineType")
+      let previous = typeRecord(d.family, c.itemID)
+      try require((previous?.revision ?? 0) == expected, "Read the current type revision first")
+      try d.validate(id: c.itemID)
+      if d.family == .item
+        && (previous?.definition.base?.rawValue ?? c.itemID) != (d.base?.rawValue ?? c.itemID)
+      {
+        try require(
+          !entries.contains {
+            $0.change.operation == .create && $0.change.kind?.rawValue == c.itemID
+          },
+          "This item type is in use with a different base")
+      }
+      if definitions == nil { definitions = [:] }
+      definitions?[d.family.rawValue + ":" + c.itemID] = RegisteredType(
+        id: c.itemID, revision: expected + 1, definition: d)
+      entries.append(e)
+      return
+    }
+    try require(
+      c.definition == nil && c.expectedRevision == nil, "Type declarations need defineType")
+    try validateFields(
+      c.payload, hints: typeRecord(.event, c.operation.rawValue)?.definition.fields, patch: false)
     if let title = c.title { try require(present(title), "Title cannot be empty") }
     if let status = c.status { try require(present(status), "Status cannot be empty") }
     for member in c.members ?? [] { try require(present(member.name), "A member name is required") }
@@ -179,29 +219,51 @@ public struct Workspace: Codable, Sendable {
         throw RelayError("create needs kind and title")
       }
       try require(items[c.itemID] == nil, "Item already exists: \(c.itemID)")
+      let template = typeRecord(.item, kind.rawValue)?.definition
       item = Item(
-        id: c.itemID, kind: kind, parentID: c.parentID, title: title, status: c.status ?? "待推进",
+        id: c.itemID, kind: kind, baseKind: template?.base == kind ? nil : template?.base,
+        parentID: c.parentID, title: title, status: c.status ?? template?.defaultStatus ?? "待推进",
         members: [])
     } else {
       guard let existing = items[c.itemID] else { throw RelayError("Unknown item: \(c.itemID)") }
       item = existing
     }
     if c.operation == .promote {
-      try require(item.kind == .idea, "Only an exploration can be scheduled as a requirement")
+      try require(item.behavior == .idea, "Only an exploration can be scheduled as a requirement")
       item.kind = .requirement
+      item.baseKind = nil
+    }
+    if let fields = c.fields {
+      try validateFields(
+        fields, hints: typeRecord(.item, item.kind.rawValue)?.definition.fields, patch: true)
+      var merged = item.fields ?? [:]
+      for (key, value) in fields { merged[key] = value == .null ? nil : value }
+      try validateFields(merged, hints: nil, patch: true)
+      item.fields = merged
     }
     if let parent = c.parentID { item.parentID = parent }
-    switch item.kind {
+    switch item.behavior {
     case .direction: try require(item.parentID == nil, "A direction has no parent")
     case .requirement:
       try require(
-        item.parentID.flatMap { items[$0]?.kind } == .direction, "A requirement needs a direction")
+        item.parentID.flatMap { items[$0]?.behavior } == .direction,
+        "A requirement needs a direction")
     case .task:
       try require(
-        item.parentID.flatMap { items[$0]?.kind } == .requirement, "A task needs a requirement")
+        item.parentID.flatMap { items[$0]?.behavior } == .requirement, "A task needs a requirement")
     case .idea:
       if let parent = item.parentID {
-        try require(items[parent]?.kind == .direction, "An exploration can link to a direction")
+        try require(items[parent]?.behavior == .direction, "An exploration can link to a direction")
+      }
+    default:
+      if let parent = item.parentID { try require(items[parent] != nil, "Unknown parent") }
+    }
+    if var parent = c.parentID {
+      var visited: Set<String> = [item.id]
+      while true {
+        try require(visited.insert(parent).inserted, "Items cannot form a cycle")
+        guard let next = items[parent]?.parentID else { break }
+        parent = next
       }
     }
     item.title = c.title ?? item.title
@@ -213,7 +275,7 @@ public struct Workspace: Codable, Sendable {
     if let start = item.start, let end = item.end {
       try require(start <= end, "End precedes start")
     }
-    if item.kind == .requirement {
+    if item.behavior == .requirement {
       try require(
         item.start != nil && item.end != nil, "A scheduled requirement needs start and end")
     }
